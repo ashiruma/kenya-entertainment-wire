@@ -10,6 +10,7 @@ import Discover from "./pages/newsroom/Discover";
 import DraftsList from "./pages/newsroom/DraftsList";
 import DraftEditor from "./pages/newsroom/DraftEditor";
 import Published from "./pages/newsroom/Published";
+import Admin from "./pages/newsroom/Admin";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/newsroom/drafts" element={<DraftsList />} />
           <Route path="/newsroom/draft/:id" element={<DraftEditor />} />
           <Route path="/newsroom/published" element={<Published />} />
+          <Route path="/newsroom/admin" element={<Admin />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
