@@ -14,16 +14,182 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      discovered_stories: {
+        Row: {
+          category: string | null
+          created_at: string
+          excerpt: string | null
+          id: string
+          image_url: string | null
+          published_at: string | null
+          raw_content: string | null
+          region: string | null
+          source: string
+          source_url: string
+          status: string
+          title: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          excerpt?: string | null
+          id?: string
+          image_url?: string | null
+          published_at?: string | null
+          raw_content?: string | null
+          region?: string | null
+          source: string
+          source_url: string
+          status?: string
+          title: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          excerpt?: string | null
+          id?: string
+          image_url?: string | null
+          published_at?: string | null
+          raw_content?: string | null
+          region?: string | null
+          source?: string
+          source_url?: string
+          status?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      drafts: {
+        Row: {
+          author_id: string
+          body: string | null
+          category: string | null
+          created_at: string
+          facebook_post: string | null
+          headline: string
+          hero_image_url: string | null
+          id: string
+          instagram_post: string | null
+          lede: string | null
+          published_at: string | null
+          region: string | null
+          source_story_id: string | null
+          status: string
+          template_type: string
+          twitter_post: string | null
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          facebook_post?: string | null
+          headline: string
+          hero_image_url?: string | null
+          id?: string
+          instagram_post?: string | null
+          lede?: string | null
+          published_at?: string | null
+          region?: string | null
+          source_story_id?: string | null
+          status?: string
+          template_type?: string
+          twitter_post?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          facebook_post?: string | null
+          headline?: string
+          hero_image_url?: string | null
+          id?: string
+          instagram_post?: string | null
+          lede?: string | null
+          published_at?: string | null
+          region?: string | null
+          source_story_id?: string | null
+          status?: string
+          template_type?: string
+          twitter_post?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drafts_source_story_id_fkey"
+            columns: ["source_story_id"]
+            isOneToOne: false
+            referencedRelation: "discovered_stories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "editor" | "writer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +316,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "editor", "writer"],
+    },
   },
 } as const
