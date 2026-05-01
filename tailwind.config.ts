@@ -19,9 +19,25 @@ export default {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        "ink-mid": "hsl(var(--ink-mid))",
+        "ink-light": "hsl(var(--ink-light))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          mid: "hsl(var(--primary-mid))",
+        },
+        teal: {
+          DEFAULT: "hsl(var(--primary))",
+          light: "hsl(var(--teal-light))",
+          pale: "hsl(var(--teal-pale))",
+        },
+        gold: {
+          DEFAULT: "hsl(var(--accent))",
+          light: "hsl(var(--gold-light))",
+        },
+        red: {
+          DEFAULT: "hsl(var(--destructive))",
+          light: "hsl(var(--red-light))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -63,6 +79,15 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      fontFamily: {
+        display: ['"Playfair Display"', 'Georgia', 'serif'],
+        sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+      },
+      boxShadow: {
+        card: 'var(--shadow-card)',
+        elevated: 'var(--shadow-elevated)',
+      },
       keyframes: {
         "accordion-down": {
           from: {
@@ -80,10 +105,20 @@ export default {
             height: "0",
           },
         },
+        ticker: {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+        "fade-in-up": {
+          "0%": { opacity: "0", transform: "translateY(8px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        ticker: "ticker 32s linear infinite",
+        "fade-in-up": "fade-in-up 0.3s ease-out",
       },
     },
   },
