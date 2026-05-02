@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { LogOut, User as UserIcon } from "lucide-react";
 
 export function Masthead({ variant = "newsroom" }: { variant?: "newsroom" | "public" }) {
-  const { user, signOut, isAdmin } = useAuth();
+  const { user, signOut, isAdmin, isEditor } = useAuth();
   const navigate = useNavigate();
 
   return (
@@ -19,6 +19,9 @@ export function Masthead({ variant = "newsroom" }: { variant?: "newsroom" | "pub
               <NavLink to="/newsroom" className={({ isActive }) => isActive ? "text-accent" : "text-primary-foreground/80 hover:text-primary-foreground"}>Discover</NavLink>
               <NavLink to="/newsroom/drafts" className={({ isActive }) => isActive ? "text-accent" : "text-primary-foreground/80 hover:text-primary-foreground"}>Drafts</NavLink>
               <NavLink to="/newsroom/published" className={({ isActive }) => isActive ? "text-accent" : "text-primary-foreground/80 hover:text-primary-foreground"}>Published</NavLink>
+              {isEditor && (
+                <NavLink to="/newsroom/health" className={({ isActive }) => isActive ? "text-accent" : "text-primary-foreground/80 hover:text-primary-foreground"}>Health</NavLink>
+              )}
               {isAdmin && (
                 <NavLink to="/newsroom/admin" className={({ isActive }) => isActive ? "text-accent" : "text-primary-foreground/80 hover:text-primary-foreground"}>Admin</NavLink>
               )}

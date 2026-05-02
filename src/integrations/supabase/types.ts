@@ -154,6 +154,69 @@ export type Database = {
         }
         Relationships: []
       }
+      scrape_blocklist: {
+        Row: {
+          created_at: string
+          domain: string
+          id: string
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          id?: string
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          id?: string
+          reason?: string | null
+        }
+        Relationships: []
+      }
+      scrape_failures: {
+        Row: {
+          blocked: boolean
+          created_at: string
+          domain: string
+          fail_count: number
+          id: string
+          last_error: string | null
+          last_failed_at: string | null
+          last_status_code: number | null
+          last_success_at: string | null
+          source_url: string
+          updated_at: string
+        }
+        Insert: {
+          blocked?: boolean
+          created_at?: string
+          domain: string
+          fail_count?: number
+          id?: string
+          last_error?: string | null
+          last_failed_at?: string | null
+          last_status_code?: number | null
+          last_success_at?: string | null
+          source_url: string
+          updated_at?: string
+        }
+        Update: {
+          blocked?: boolean
+          created_at?: string
+          domain?: string
+          fail_count?: number
+          id?: string
+          last_error?: string | null
+          last_failed_at?: string | null
+          last_status_code?: number | null
+          last_success_at?: string | null
+          source_url?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
