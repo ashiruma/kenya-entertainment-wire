@@ -11,6 +11,7 @@ import DraftsList from "./pages/newsroom/DraftsList";
 import DraftEditor from "./pages/newsroom/DraftEditor";
 import Published from "./pages/newsroom/Published";
 import Admin from "./pages/newsroom/Admin";
+import ScrapeHealth from "./pages/newsroom/ScrapeHealth";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -31,6 +32,7 @@ const App = () => (
           <Route path="/newsroom/draft/:id" element={<DraftEditor />} />
           <Route path="/newsroom/published" element={<Published />} />
           <Route path="/newsroom/admin" element={<Admin />} />
+          <Route path="/newsroom/health" element={<ScrapeHealth />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

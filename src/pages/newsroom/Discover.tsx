@@ -65,14 +65,26 @@ export default function Discover() {
   const writeDraft = async (story: Story) => {
     setWritingId(story.id);
     try {
-      // Optionally deep-scrape first
+      // Try deep-scrape; on Firecrawl 403/402/etc fall back to RSS title + excerpt
       let content = story.excerpt || "";
+      let usedFallback = false;
       try {
         const { data: scrape } = await supabase.functions.invoke("scrape-article", {
           body: { story_id: story.id, url: story.source_url },
         });
-        if (scrape?.content) content = scrape.content;
-      } catch {}
+        if (scrape?.success && scrape?.content) {
+          content = scrape.content;
+        } else if (scrape?.fallback) {
+          usedFallback = true;
+          // Compose richest available context from RSS (title + excerpt + image hint)
+          content = [story.title, story.excerpt].filter(Boolean).join("\n\n");
+        }
+      } catch {
+        usedFallback = true;
+      }
+      if (usedFallback) {
+        toast.message("Using RSS excerpt", { description: "Source page couldn't be scraped — drafting from feed data." });
+      }
 
       const { data, error } = await supabase.functions.invoke("write-article", {
         body: {
