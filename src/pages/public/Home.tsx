@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Masthead } from "@/components/Masthead";
+import { Search } from "lucide-react";
 
 type Article = {
   id: string;
@@ -16,6 +17,8 @@ type Article = {
 export default function PublicHome() {
   const { category } = useParams<{ category?: string }>();
   const [articles, setArticles] = useState<Article[]>([]);
+  const [region, setRegion] = useState<"all" | "western_kenya" | "national">("all");
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let q = supabase
@@ -28,9 +31,21 @@ export default function PublicHome() {
     q.then(({ data }) => setArticles((data as Article[]) || []));
   }, [category]);
 
-  const hero = articles[0];
+  const filtered = useMemo(() => {
+    return articles.filter((a) => {
+      if (region !== "all" && a.region !== region) return false;
+      if (query.trim()) {
+        const q = query.toLowerCase();
+        if (!`${a.headline} ${a.lede ?? ""} ${a.category ?? ""}`.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [articles, region, query]);
+
+  const isFiltering = region !== "all" || query.trim().length > 0 || !!category;
+  const hero = !isFiltering ? articles[0] : undefined;
   const western = articles.filter((a) => a.region === "western_kenya").slice(0, 4);
-  const rest = articles.slice(1);
+  const list = isFiltering ? filtered : articles.slice(1);
 
   return (
     <div className="min-h-screen bg-background">
@@ -43,7 +58,39 @@ export default function PublicHome() {
           </div>
         )}
 
-        {!category && hero && (
+        {/* Filter bar */}
+        <div className="mb-6 flex flex-wrap items-center gap-3 bg-card border border-border rounded p-3">
+          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+            <Search size={14} className="text-ink-light" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search headlines, ledes, topics…"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-light"
+            />
+          </div>
+          <div className="flex gap-1 text-[12px]">
+            {([
+              ["all", "All regions"],
+              ["western_kenya", "Western Kenya"],
+              ["national", "National"],
+            ] as const).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setRegion(k)}
+                className={`px-3 py-1.5 rounded transition ${region === k ? "bg-primary text-primary-foreground" : "text-ink-light hover:text-foreground"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {(query || region !== "all") && (
+            <button onClick={() => { setQuery(""); setRegion("all"); }} className="text-[12px] text-destructive hover:underline">Clear</button>
+          )}
+        </div>
+
+        {hero && (
           <Link to={`/article/${hero.id}`} className="block mb-10 group">
             <div className="grid md:grid-cols-[1.4fr_1fr] gap-6 items-center bg-card border border-border rounded shadow-elevated overflow-hidden">
               <div className="aspect-[16/10] bg-muted relative overflow-hidden">
@@ -75,11 +122,16 @@ export default function PublicHome() {
             <section>
               <div className="flex items-center gap-3 mb-5">
                 <div className="h-px bg-border flex-1" />
-                <h2 className="label-eyebrow text-primary">{category ? "All stories" : "Latest"}</h2>
+                <h2 className="label-eyebrow text-primary">
+                  {isFiltering ? `${list.length} ${list.length === 1 ? "result" : "results"}` : "Latest"}
+                </h2>
                 <div className="h-px bg-border flex-1" />
               </div>
+              {list.length === 0 ? (
+                <p className="text-center text-sm text-ink-light py-10">No stories match your filters.</p>
+              ) : (
               <div className="grid sm:grid-cols-2 gap-6">
-                {(category ? articles : rest).map((a) => (
+                {list.map((a) => (
                   <Link key={a.id} to={`/article/${a.id}`} className="group">
                     <div className="aspect-[16/10] bg-muted overflow-hidden mb-3 rounded">
                       {a.hero_image_url ? (
@@ -94,6 +146,7 @@ export default function PublicHome() {
                   </Link>
                 ))}
               </div>
+              )}
             </section>
             {!category && (
               <aside>
