@@ -21,10 +21,28 @@ export default function Admin() {
 
   useEffect(() => {
     if (loading) return;
-    if (!user) return navigate("/auth");
-    if (!isAdmin) return navigate("/newsroom");
+    if (!user) {
+      navigate("/auth", { replace: true });
+      return;
+    }
+    if (!isAdmin) {
+      navigate("/newsroom", { replace: true });
+      return;
+    }
     void load();
-  }, [user, isAdmin, loading]);
+  }, [user, isAdmin, loading, navigate]);
+
+  // Hard gate: never render admin UI for non-admins (defense in depth — RLS already blocks data)
+  if (loading || !user || !isAdmin) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Masthead />
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 py-16 text-center text-sm text-ink-light">
+          Verifying access…
+        </main>
+      </div>
+    );
+  }
 
   const load = async () => {
     const { data: profiles } = await supabase.from("profiles").select("user_id, display_name");

@@ -6,18 +6,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Curated Kenyan entertainment RSS feeds. Western Kenya focus is applied via region tagging.
+// Curated Kenyan + East African entertainment RSS feeds. Western Kenya focus via region tagging.
 const FEEDS = [
   { url: "https://www.pulselive.co.ke/entertainment/rss", source: "Pulse Live Kenya" },
+  { url: "https://www.pulselive.co.ke/rss", source: "Pulse Live Kenya" },
   { url: "https://mpasho.co.ke/feed/", source: "Mpasho" },
   { url: "https://www.standardmedia.co.ke/rss/entertainment.php", source: "Standard SDE" },
+  { url: "https://www.standardmedia.co.ke/rss/headlines.php", source: "Standard" },
   { url: "https://nation.africa/kenya/rss.xml", source: "Nation Africa" },
   { url: "https://citizen.digital/feed", source: "Citizen Digital" },
+  { url: "https://www.tuko.co.ke/rss/all.rss", source: "Tuko" },
+  { url: "https://www.kenyans.co.ke/feeds/news", source: "Kenyans.co.ke" },
+  { url: "https://www.ghafla.com/ke/feed/", source: "Ghafla Kenya" },
+  { url: "https://www.the-star.co.ke/rss/", source: "The Star" },
+  { url: "https://www.capitalfm.co.ke/entertainment/feed/", source: "Capital FM" },
+  { url: "https://www.bizna.co.ke/category/entertainment/feed/", source: "Bizna Kenya" },
 ];
 
 const WESTERN_KENYA_KEYWORDS = [
   "kakamega", "kisumu", "bungoma", "vihiga", "busia", "siaya", "homa bay", "migori",
-  "western kenya", "nyanza", "luhya", "luo", "kisii", "mumias",
+  "western kenya", "nyanza", "luhya", "luo", "kisii", "mumias", "webuye", "malava",
+  "butere", "mbale", "kapsabet", "eldoret", "kitale", "nandi", "trans nzoia",
 ];
 
 function decodeEntities(s: string): string {
@@ -60,13 +69,13 @@ function detectRegion(text: string): string {
 async function fetchFeed(url: string, source: string) {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "AmaicaMedia/1.0 (+https://amaica.media)" },
-      signal: AbortSignal.timeout(10000),
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; AmaicaBot/1.0; +https://amaica.media)" },
+      signal: AbortSignal.timeout(12000),
     });
     if (!res.ok) return [];
     const xml = await res.text();
     const itemBlocks = xml.match(/<item[\s\S]*?<\/item>/gi) || xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
-    return itemBlocks.slice(0, 15).map((block) => {
+    return itemBlocks.slice(0, 25).map((block) => {
       const title = stripTags(pick(block, "title") || "");
       const link = (pick(block, "link") || block.match(/<link[^>]+href="([^"]+)"/i)?.[1] || "").trim();
       const desc = stripTags(pick(block, "description") || pick(block, "summary") || pick(block, "content:encoded") || "");
@@ -90,6 +99,44 @@ async function fetchFeed(url: string, source: string) {
   }
 }
 
+// Optional: enrich with Firecrawl web search (time-filtered, last 24h) for fresh stories
+async function firecrawlSearch(query: string): Promise<Array<{
+  title: string; source: string; source_url: string; excerpt: string;
+  image_url: string | null; category: string; region: string; published_at: string | null;
+}>> {
+  const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
+  if (!apiKey) return [];
+  try {
+    const res = await fetch("https://api.firecrawl.dev/v2/search", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ query, limit: 10, lang: "en", country: "ke", tbs: "qdr:d" }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      console.warn("Firecrawl search failed:", res.status, await res.text().catch(() => ""));
+      return [];
+    }
+    const json = await res.json();
+    const results = json.data?.web ?? json.data ?? json.web ?? [];
+    return (Array.isArray(results) ? results : []).map((r: { url?: string; title?: string; description?: string }) => {
+      const title = stripTags(r.title || "");
+      const excerpt = stripTags(r.description || "").slice(0, 400);
+      const url = r.url || "";
+      const blob = `${title} ${excerpt} ${query}`;
+      let host = "Web";
+      try { host = new URL(url).hostname.replace(/^www\./, ""); } catch {}
+      return {
+        title, source: host, source_url: url, excerpt, image_url: null,
+        category: "entertainment", region: detectRegion(blob), published_at: null,
+      };
+    }).filter((i) => i.title && i.source_url);
+  } catch (e) {
+    console.warn("Firecrawl error:", e);
+    return [];
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -99,17 +146,28 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Fetch all feeds in parallel
-    const results = await Promise.all(FEEDS.map((f) => fetchFeed(f.url, f.source)));
-    const items = results.flat();
+    // Fetch all RSS feeds + Firecrawl search queries in parallel
+    const SEARCH_QUERIES = [
+      "Kenya entertainment news today",
+      "Western Kenya music event Kakamega Kisumu Bungoma",
+      "Kenyan celebrity news this week",
+      "Kenyan music release new song",
+      "Luhya Luo artist Kenya",
+      "Kenya film TV show premiere",
+    ];
+    const [rss, search] = await Promise.all([
+      Promise.all(FEEDS.map((f) => fetchFeed(f.url, f.source))).then((r) => r.flat()),
+      Promise.all(SEARCH_QUERIES.map((q) => firecrawlSearch(q))).then((r) => r.flat()),
+    ]);
+    const items = [...rss, ...search];
 
     // Filter to entertainment-ish keywords (very loose) and de-dupe
-    const ent = /(music|song|album|artist|concert|festival|film|movie|tv|drama|celeb|actor|actress|singer|rapper|dj|netflix|show|premiere|award|nomin|tour|gospel|gengetone|bongo|afrobeat)/i;
+    const ent = /(music|song|album|artist|concert|festival|film|movie|tv|drama|celeb|actor|actress|singer|rapper|dj|netflix|show|premiere|award|nomin|tour|gospel|gengetone|bongo|afrobeat|comedy|comedian|podcast|tiktok|youtube|fashion|culture|nightlife|club|dance|theatre|theater|play|sauti|nyashinski|khaligraph|bahati|otile|sde|mpasho)/i;
     const seen = new Set<string>();
     const filtered = items.filter((i) => {
       if (seen.has(i.source_url)) return false;
       seen.add(i.source_url);
-      const looksEntertainment = ent.test(`${i.title} ${i.excerpt}`) || /entertainment|sde|buzz|pulse/i.test(i.source);
+      const looksEntertainment = ent.test(`${i.title} ${i.excerpt}`) || /entertainment|sde|buzz|pulse|mpasho|ghafla|capital/i.test(i.source);
       return looksEntertainment;
     });
 
