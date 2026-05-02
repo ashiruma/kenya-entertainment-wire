@@ -28,14 +28,23 @@ Deno.serve(async (req) => {
       }),
     });
 
-    const fcData = await fcRes.json();
+    const fcData = await fcRes.json().catch(() => ({}));
     if (!fcRes.ok) {
       if (fcRes.status === 402) {
-        return new Response(JSON.stringify({ error: "Firecrawl credits exhausted. Please top up at firecrawl.dev." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return new Response(JSON.stringify({ success: false, fallback: true, error: "Firecrawl credits exhausted. Please top up at firecrawl.dev.", content: "" }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      throw new Error(`Firecrawl ${fcRes.status}: ${JSON.stringify(fcData)}`);
+      // Site unsupported / blocked / rate-limited — fall back gracefully so the writer can use RSS excerpt
+      console.warn(`Firecrawl ${fcRes.status} for ${url}:`, JSON.stringify(fcData).slice(0, 300));
+      return new Response(JSON.stringify({
+        success: false,
+        fallback: true,
+        error: fcRes.status === 403 ? "SOURCE_NOT_SUPPORTED" : `FIRECRAWL_${fcRes.status}`,
+        content: "",
+      }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const markdown: string = fcData.data?.markdown || fcData.markdown || "";
@@ -55,8 +64,8 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error("scrape-article error:", e);
     return new Response(
-      JSON.stringify({ success: false, error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({ success: false, fallback: true, error: e instanceof Error ? e.message : "Unknown error", content: "" }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
