@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entertainment News Writing Guide — Amaica Media</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --teal: #1A4F52;
+    --teal-mid: #2a6e72;
+    --teal-light: #e8f4f5;
+    --teal-pale: #f3fafb;
+    --red: #E8391D;
+    --red-light: #fdeee9;
+    --gold: #F5B800;
+    --gold-light: #fef9e6;
+    --ink: #0f1a1b;
+    --ink-mid: #2c3e40;
+    --ink-light: #6b7c7e;
+    --rule: #d1dfe0;
+    --surface: #f7fafa;
+    --white: #ffffff;
+  }
+
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--surface);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+
+  /* MASTHEAD */
+  .masthead {
+    background: var(--teal);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 3px solid var(--gold);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    height: 56px;
+  }
+  .masthead-logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.02em;
+  }
+  .masthead-logo span { color: var(--gold); }
+  .masthead-tag {
+    font-size: 11px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  /* TICKER */
+  .ticker-wrap {
+    background: var(--red);
+    overflow: hidden;
+    height: 30px;
+    display: flex;
+    align-items: center;
+  }
+  .ticker-label {
+    background: var(--ink);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0 14px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .ticker-track {
+    display: flex;
+    animation: ticker 28s linear infinite;
+    white-space: nowrap;
+  }
+  .ticker-track span {
+    color: #fff;
+    font-size: 12px;
+    padding: 0 2rem;
+    letter-spacing: 0.04em;
+  }
+  @keyframes ticker {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  /* LAYOUT */
+  .shell { display: flex; min-height: calc(100vh - 86px); }
+
+  /* SIDEBAR NAV */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--white);
+    border-right: 1px solid var(--rule);
+    position: sticky;
+    top: 86px;
+    height: calc(100vh - 86px);
+    overflow-y: auto;
+    padding: 1.5rem 0;
+  }
+  .nav-section-label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    padding: 0 1.25rem;
+    margin-bottom: 6px;
+    margin-top: 1.25rem;
+  }
+  .nav-section-label:first-child { margin-top: 0; }
+  .nav-item {
+    display: block;
+    padding: 9px 1.25rem;
+    font-size: 13px;
+    color: var(--ink-mid);
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.15s;
+    text-decoration: none;
+    font-weight: 400;
+    background: none;
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+    width: 100%;
+    text-align: left;
+  }
+  .nav-item:hover { background: var(--teal-pale); color: var(--teal); }
+  .nav-item.active { border-left-color: var(--teal); color: var(--teal); background: var(--teal-pale); font-weight: 500; }
+
+  /* MAIN CONTENT */
+  .main {
+    flex: 1;
+    padding: 2.5rem 2.5rem 4rem;
+    max-width: 720px;
+    min-width: 0;
+  }
+
+  /* SECTION */
+  .section { display: none; animation: fadeIn 0.2s ease; }
+  .section.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 0.35rem;
+    line-height: 1.2;
+  }
+  .section-sub {
+    font-size: 14px;
+    color: var(--ink-light);
+    font-weight: 300;
+    margin-bottom: 2rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  /* RULE CARD */
+  .rule-card {
+    background: var(--white);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--teal);
+    border-radius: 0 3px 3px 0;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 16px;
+  }
+  .rule-card.gold { border-left-color: var(--gold); }
+  .rule-card.red { border-left-color: var(--red); }
+  .rule-num {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 4px;
+  }
+  .rule-num.gold { color: #8a6400; }
+  .rule-num.red { color: var(--red); }
+  .rule-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+  .rule-desc {
+    font-size: 14px;
+    color: var(--ink-mid);
+    line-height: 1.7;
+  }
+
+  /* EXAMPLE BOXES */
+  .ex-label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 12px 0 4px;
+  }
+  .ex-label.good { color: var(--teal); }
+  .ex-label.bad { color: var(--red); }
+  .ex-box {
+    padding: 10px 14px;
+    border-radius: 3px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .ex-box.good { background: var(--teal-light); color: var(--ink); }
+  .ex-box.bad { background: var(--red-light); color: var(--ink); }
+
+  /* PYRAMID */
+  .pyramid { margin: 1.5rem 0; }
+  .pyr-row {
+    padding: 11px 16px;
+    margin-bottom: 3px;
+    border-radius: 3px;
+    font-size: 13px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .pyr-row span { font-size: 11px; opacity: 0.7; text-align: right; flex-shrink: 0; }
+
+  /* 5 Ws GRID */
+  .five-w {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 10px;
+    margin: 1.25rem 0;
+  }
+  .w-card {
+    background: var(--teal-light);
+    border: 1px solid #c2dfe2;
+    border-radius: 3px;
+    padding: 14px 10px;
+    text-align: center;
+  }
+  .w-letter { font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 700; color: var(--teal); line-height: 1; }
+  .w-word { font-size: 13px; color: var(--teal); font-weight: 500; margin: 4px 0 3px; }
+  .w-hint { font-size: 11px; color: var(--ink-light); }
+
+  /* TEMPLATE CARD */
+  .template-card {
+    background: var(--white);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 18px;
+  }
+  .template-header {
+    background: var(--teal);
+    padding: 10px 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .template-name { font-size: 14px; font-weight: 500; color: #fff; }
+  .template-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+  .tag {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 3px 9px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.9);
+    letter-spacing: 0.04em;
+  }
+  .template-body { padding: 1.25rem; }
+  .template-meta { font-size: 12px; color: var(--ink-light); margin-bottom: 1rem; }
+  .t-block { margin-bottom: 12px; }
+  .t-label {
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-light);
+    margin-bottom: 3px;
+  }
+  .t-text {
+    font-size: 13px;
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 8px 12px;
+    line-height: 1.6;
+    color: var(--ink-mid);
+  }
+
+  /* MISTAKES */
+  .mistake-card {
+    background: var(--white);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 14px;
+  }
+  .mistake-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .mistake-num {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--red-light); color: var(--red);
+    font-size: 12px; font-weight: 500;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .mistake-title { font-size: 15px; font-weight: 500; color: var(--ink); }
+
+  /* ATTRIBUTION TABLE */
+  .attr-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13px; }
+  .attr-table th {
+    background: var(--teal);
+    color: #fff;
+    padding: 9px 14px;
+    text-align: left;
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .attr-table td { padding: 9px 14px; border-bottom: 1px solid var(--rule); color: var(--ink-mid); vertical-align: top; }
+  .attr-table tr:last-child td { border-bottom: none; }
+  .attr-table tr:nth-child(even) td { background: var(--teal-pale); }
+  .attr-verb { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--teal); font-weight: 500; }
+
+  /* PLATFORM CARDS */
+  .platform-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 1rem 0; }
+  .platform-card { background: var(--white); border: 1px solid var(--rule); border-radius: 3px; padding: 1rem 1.25rem; }
+  .platform-name { font-size: 13px; font-weight: 500; color: var(--teal); margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+  .platform-detail { font-size: 12px; color: var(--ink-mid); line-height: 1.6; }
+  .platform-detail strong { font-weight: 500; display: block; margin-bottom: 2px; }
+
+  /* DIVIDER */
+  .divider { border: none; border-top: 1px solid var(--rule); margin: 2rem 0; }
+
+  /* PRINT */
+  @media print {
+    .masthead, .ticker-wrap, .sidebar { display: none !important; }
+    .shell { display: block; }
+    .main { max-width: 100%; padding: 1rem; }
+    .section { display: block !important; page-break-after: always; }
+  }
+
+  @media (max-width: 680px) {
+    .sidebar { display: none; }
+    .main { padding: 1.5rem 1rem 3rem; }
+    .five-w { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <div class="masthead-logo">Amaica <span>MEDIA</span></div>
+  <div class="masthead-tag">Newsroom Style Guide</div>
+</div>
+
+<div class="ticker-wrap">
+  <div class="ticker-label" id="tickerLabel">LIVE</div>
+  <div class="ticker-track" id="tickerTrack">
+    <span id="tickerSpan1">Fetching latest entertainment news...</span>
+    <span id="tickerSpan2">Fetching latest entertainment news...</span>
+  </div>
+</div>
+
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="nav-section-label">Foundations</div>
+    <button class="nav-item active" onclick="show('rules', this)">Writing rules</button>
+    <button class="nav-item" onclick="show('structure', this)">Story structure</button>
+
+    <div class="nav-section-label">Reference</div>
+    <button class="nav-item" onclick="show('templates', this)">Story templates</button>
+    <button class="nav-item" onclick="show('style', this)">Style & language</button>
+
+    <div class="nav-section-label">Self-check</div>
+    <button class="nav-item" onclick="show('mistakes', this)">Common mistakes</button>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- WRITING RULES -->
+    <div id="rules" class="section active">
+      <div class="section-title">Writing rules</div>
+      <div class="section-sub">Five laws you follow on every single story, every platform, every beat.</div>
+
+      <div class="rule-card">
+        <div class="rule-num">Rule 01</div>
+        <div class="rule-title">Lead with the most important fact</div>
+        <div class="rule-desc">The first sentence — the lede — must answer the question a reader would ask: "What happened?" Put the biggest news first. Never bury it three paragraphs in.</div>
+        <div class="ex-label good">Good lede</div>
+        <div class="ex-box good">Kenyan rapper Khaligraph Jones has been announced as the headline act for the 2025 Kakamega Cultural Festival, organizers confirmed Wednesday.</div>
+        <div class="ex-label bad">Buried lede</div>
+        <div class="ex-box bad">The Kakamega Cultural Festival has been growing every year. This year it will feature many artists. The headline act is Khaligraph Jones.</div>
+      </div>
+
+      <div class="rule-card">
+        <div class="rule-num">Rule 02</div>
+        <div class="rule-title">Every claim needs attribution</div>
+        <div class="rule-desc">You did not witness it. Someone said it, released it, or confirmed it. Always say who. Use: said, confirmed, announced, told Amaica Media, according to.</div>
+        <div class="ex-label good">Attributed</div>
+        <div class="ex-box good">"We want to bring the biggest names in Kenyan music to Western Kenya," festival director Amina Were told Amaica Media.</div>
+        <div class="ex-label bad">No attribution</div>
+        <div class="ex-box bad">The festival director wants to bring the biggest names in Kenyan music to Western Kenya.</div>
+      </div>
+
+      <div class="rule-card">
+        <div class="rule-num">Rule 03</div>
+        <div class="rule-title">Past tense for events, present for standing facts</div>
+        <div class="rule-desc">Events that happened = past tense. Things still true = present tense.</div>
+        <div class="ex-label good">Correct</div>
+        <div class="ex-box good">The album dropped Friday. It features 12 tracks and runs 47 minutes.</div>
+      </div>
+
+      <div class="rule-card">
+        <div class="rule-num">Rule 04</div>
+        <div class="rule-title">Keep sentences short. One idea per sentence.</div>
+        <div class="rule-desc">Target 20 words per sentence. If a sentence has more than one comma, split it. Readers scan. Make it easy for them.</div>
+      </div>
+
+      <div class="rule-card">
+        <div class="rule-num">Rule 05</div>
+        <div class="rule-title">Full name on first mention, last name after</div>
+        <div class="rule-desc">Write "Sauti Sol" in full on first mention. After that: "the group." For individuals: "Bien Aime Baraza" first, then "Baraza" or "Bien." Apply this rule to every person and act in your story.</div>
+      </div>
+    </div>
+
+    <!-- STORY STRUCTURE -->
+    <div id="structure" class="section">
+      <div class="section-title">Story structure</div>
+      <div class="section-sub">Entertainment news uses the inverted pyramid. Most important first, background last. Editors cut from the bottom — so protect the top.</div>
+
+      <div class="pyramid">
+        <div class="pyr-row" style="background:#1A4F52;">What happened <span>Lede — 1 sentence</span></div>
+        <div class="pyr-row" style="background:#1e5c5f;">Who, when, where <span>Context paragraph</span></div>
+        <div class="pyr-row" style="background:#236669;">Quotes from source <span>1–2 direct quotes</span></div>
+        <div class="pyr-row" style="background:#286b6e;">More detail / reaction <span>Body paragraphs</span></div>
+        <div class="pyr-row" style="background:#2d7073;">Background / history <span>Can be cut safely</span></div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="rule-title" style="margin-bottom:0.5rem;">The 5 Ws — answer these in the first two paragraphs</div>
+      <div class="five-w">
+        <div class="w-card"><div class="w-letter">W</div><div class="w-word">Who</div><div class="w-hint">The artist or subject</div></div>
+        <div class="w-card"><div class="w-letter">W</div><div class="w-word">What</div><div class="w-hint">What happened</div></div>
+        <div class="w-card"><div class="w-letter">W</div><div class="w-word">When</div><div class="w-hint">Date or time</div></div>
+        <div class="w-card"><div class="w-letter">W</div><div class="w-word">Where</div><div class="w-hint">Location / platform</div></div>
+        <div class="w-card"><div class="w-letter">W</div><div class="w-word">Why</div><div class="w-hint">Significance</div></div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="rule-card gold">
+        <div class="rule-num gold">Quote rule</div>
+        <div class="rule-title">Use quotes for emotion and opinion. Paraphrase for facts.</div>
+        <div class="rule-desc">Quotes should sound like a real person speaking. Do not quote things you can say more efficiently yourself. Quote when the words themselves matter.</div>
+        <div class="ex-label good">Quote for emotion — correct</div>
+        <div class="ex-box good">"This album is everything I have wanted to say for three years," Nyashinski told Amaica Media.</div>
+        <div class="ex-label bad">Useless quote — avoid</div>
+        <div class="ex-box bad">"The show will start at 7 PM," the organizer said.</div>
+      </div>
+    </div>
+
+    <!-- TEMPLATES -->
+    <div id="templates" class="section">
+      <div class="section-title">Story templates</div>
+      <div class="section-sub">Four scaffolds covering 90% of entertainment stories. Replace the brackets with your actual information.</div>
+
+      <div class="template-card">
+        <div class="template-header">
+          <div class="template-name">Breaking / Announcement</div>
+          <div class="template-tags"><span class="tag">Music</span><span class="tag">Events</span><span class="tag">Film</span><span class="tag">150–300 words</span></div>
+        </div>
+        <div class="template-body">
+          <div class="t-block"><div class="t-label">Lede</div><div class="t-text">[Artist/group] has [released / been announced / signed / performed] [what], [organization] confirmed [day].</div></div>
+          <div class="t-block"><div class="t-label">Context paragraph</div><div class="t-text">The [album/event/deal] [key detail — length, location, cost, date]. [One more fact that answers a likely reader question].</div></div>
+          <div class="t-block"><div class="t-label">Quote</div><div class="t-text">"[Direct quote from source]," [name, title] [said / told Amaica Media].</div></div>
+          <div class="t-block"><div class="t-label">Background</div><div class="t-text">[Artist] is known for [brief credential]. [Previous relevant work or milestone].</div></div>
+          <div class="t-block"><div class="t-label">Close</div><div class="t-text">[Next step: when it drops, where to get tickets, what comes next].</div></div>
+        </div>
+      </div>
+
+      <div class="template-card">
+        <div class="template-header" style="background:var(--red);">
+          <div class="template-name">Event Preview</div>
+          <div class="template-tags"><span class="tag">Events</span><span class="tag">Concerts</span><span class="tag">Festivals</span><span class="tag">200–350 words</span></div>
+        </div>
+        <div class="template-body">
+          <div class="t-block"><div class="t-label">Lede</div><div class="t-text">[Event name] returns to [location] on [date], featuring [headline act or key draw].</div></div>
+          <div class="t-block"><div class="t-label">What to expect</div><div class="t-text">The [number]-[day/hour] event will include [lineup / programme highlights]. [Ticket price or access details].</div></div>
+          <div class="t-block"><div class="t-label">Organizer quote</div><div class="t-text">"[Quote about vision or what is new this year]," [name, role] said.</div></div>
+          <div class="t-block"><div class="t-label">Context</div><div class="t-text">[Last year's edition / history of event]. [Why it matters to Western Kenya / the region].</div></div>
+          <div class="t-block"><div class="t-label">CTA close</div><div class="t-text">Tickets are available at [place/link]. The event starts at [time].</div></div>
+        </div>
+      </div>
+
+      <div class="template-card">
+        <div class="template-header" style="background:#7a5c00;">
+          <div class="template-name">Artist / Album Review</div>
+          <div class="template-tags"><span class="tag">Reviews</span><span class="tag">300–500 words</span></div>
+        </div>
+        <div class="template-body">
+          <div class="t-block"><div class="t-label">Lede — verdict first</div><div class="t-text">[Artist]'s [album name] is [one-sentence verdict]. The [number]-track project [key quality].</div></div>
+          <div class="t-block"><div class="t-label">Standout tracks</div><div class="t-text">[Track name] is the project's strongest moment. [One sentence on what makes it work]. [Track 2] shows [different quality].</div></div>
+          <div class="t-block"><div class="t-label">Where it struggles</div><div class="t-text">[Honest critique — keep it specific, not personal].</div></div>
+          <div class="t-block"><div class="t-label">Context</div><div class="t-text">The album arrives [how long since last project]. [How it fits into the artist's catalogue].</div></div>
+          <div class="t-block"><div class="t-label">Rating + close</div><div class="t-text">[Rating if used]. [One sentence recommendation: who should listen].</div></div>
+        </div>
+      </div>
+
+      <div class="template-card">
+        <div class="template-header" style="background:var(--ink-mid);">
+          <div class="template-name">Artist Profile / Feature</div>
+          <div class="template-tags"><span class="tag">Local artists</span><span class="tag">Features</span><span class="tag">400–700 words</span></div>
+        </div>
+        <div class="template-body">
+          <div class="t-block"><div class="t-label">Scene-setting lede</div><div class="t-text">Start with a specific moment or scene that captures who the person is. Not a bio — a snapshot.</div></div>
+          <div class="t-block"><div class="t-label">The angle</div><div class="t-text">One clear question this story answers: why this person, why now?</div></div>
+          <div class="t-block"><div class="t-label">Background</div><div class="t-text">Where they are from. How they started. Key career moment that changed things.</div></div>
+          <div class="t-block"><div class="t-label">Current work</div><div class="t-text">What they are working on or have released. Their own words on it.</div></div>
+          <div class="t-block"><div class="t-label">Bigger picture</div><div class="t-text">What their story says about music / film / culture in Western Kenya or Kenya.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STYLE & LANGUAGE -->
+    <div id="style" class="section">
+      <div class="section-title">Style & language</div>
+      <div class="section-sub">Consistent language choices make Amaica Media sound like a professional newsroom, not a blog or a PR sheet.</div>
+
+      <div class="rule-title" style="margin-bottom:0.75rem;">Attribution verbs — use the right verb for the context</div>
+      <table class="attr-table">
+        <thead><tr><th>Verb</th><th>When to use</th></tr></thead>
+        <tbody>
+          <tr><td><span class="attr-verb">said</span></td><td>Neutral default for most direct quotes</td></tr>
+          <tr><td><span class="attr-verb">confirmed</span></td><td>Verified facts, official statements</td></tr>
+          <tr><td><span class="attr-verb">told Amaica Media</span></td><td>Exclusive or interview quotes — use to mark original reporting</td></tr>
+          <tr><td><span class="attr-verb">announced</span></td><td>Public declarations, press releases</td></tr>
+          <tr><td><span class="attr-verb">according to</span></td><td>Sourced from another outlet or document</td></tr>
+          <tr><td><span class="attr-verb">alleged / claimed</span></td><td>Unverified information — use carefully, sparingly</td></tr>
+        </tbody>
+      </table>
+
+      <hr class="divider">
+
+      <div class="rule-card">
+        <div class="rule-num">Numbers & dates</div>
+        <div class="rule-title">Spell out one through nine. Use figures for 10 and above.</div>
+        <div class="rule-desc">
+          Write: three songs, 12 tracks, 2,000 fans.<br>
+          Dates: Saturday, June 14 — not "14/06."<br>
+          Times: 7 PM — not 19:00, unless in a broadcast schedule.
+        </div>
+      </div>
+
+      <div class="rule-card">
+        <div class="rule-num">Titles & names</div>
+        <div class="rule-title">Capitalize official titles before a name. Lowercase after.</div>
+        <div class="rule-desc">
+          Write: Director Jane Mwangi. But: Jane Mwangi, the festival director.<br>
+          Song and album titles in quotation marks: "Sura Yako."<br>
+          Film and show titles in italics where possible, or quotation marks.
+        </div>
+      </div>
+
+      <div class="rule-card">
+        <div class="rule-num">Local context</div>
+        <div class="rule-title">Anchor Kenyan and Western Kenya stories for all readers</div>
+        <div class="rule-desc">One brief identifier on first mention is enough. "Nairobi-based producer Joefreshgoods" or "Bungoma-born comedian Mjango" gives readers orientation without being condescending.</div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="rule-title" style="margin-bottom:0.75rem;">Platform differences — same story, different length</div>
+      <div class="platform-grid">
+        <div class="platform-card">
+          <div class="platform-name">Website article</div>
+          <div class="platform-detail"><strong>200–500 words</strong> Full inverted pyramid. All 5 Ws. At least one quote. Background at the end.</div>
+        </div>
+        <div class="platform-card">
+          <div class="platform-name">Radio bulletin</div>
+          <div class="platform-detail"><strong>60–80 words</strong> Read in under 30 seconds. Lede + two supporting facts + source. No quotes — paraphrase instead.</div>
+        </div>
+        <div class="platform-card">
+          <div class="platform-name">Social post</div>
+          <div class="platform-detail"><strong>Hook + 2–3 lines + CTA</strong> No passive voice. One fact per sentence. End with a link or call to action.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMMON MISTAKES -->
+    <div id="mistakes" class="section">
+      <div class="section-title">Common mistakes</div>
+      <div class="section-sub">Six things that will make an editor send your story back. Know them before you write.</div>
+
+      <div class="mistake-card">
+        <div class="mistake-head"><div class="mistake-num">1</div><div class="mistake-title">Writing opinions as facts</div></div>
+        <div class="ex-label bad">Wrong</div>
+        <div class="ex-box bad">The performance was incredible and the crowd loved every moment.</div>
+        <div class="ex-label good">Fix</div>
+        <div class="ex-box good">The audience sang along throughout the 90-minute set. Organizers said ticket demand exceeded expectations.</div>
+      </div>
+
+      <div class="mistake-card">
+        <div class="mistake-head"><div class="mistake-num">2</div><div class="mistake-title">Vague time references</div></div>
+        <div class="ex-label bad">Wrong</div>
+        <div class="ex-box bad">The album dropped recently.</div>
+        <div class="ex-label good">Fix</div>
+        <div class="ex-box good">The album dropped Friday, May 2.</div>
+      </div>
+
+      <div class="mistake-card">
+        <div class="mistake-head"><div class="mistake-num">3</div><div class="mistake-title">Headlines that do not say what happened</div></div>
+        <div class="ex-label bad">Wrong</div>
+        <div class="ex-box bad">Big News for Kenyan Music Fans</div>
+        <div class="ex-label good">Fix</div>
+        <div class="ex-box good">Sauti Sol Announces 10-City Kenya Tour Starting July</div>
+      </div>
+
+      <div class="mistake-card">
+        <div class="mistake-head"><div class="mistake-num">4</div><div class="mistake-title">Unattributed quotes</div></div>
+        <div class="ex-label bad">Wrong</div>
+        <div class="ex-box bad">"This is the best show we have ever done." — no name, no title.</div>
+        <div class="ex-label good">Fix</div>
+        <div class="ex-box good">"This is the best show we have ever done," said Aisha Omondi, Amaica TV's head of entertainment.</div>
+      </div>
+
+      <div class="mistake-card">
+        <div class="mistake-head"><div class="mistake-num">5</div><div class="mistake-title">Fan blog language in a news article</div></div>
+        <div class="ex-label bad">Wrong</div>
+        <div class="ex-box bad">The legendary king of Afrobeats absolutely slayed the stage and left fans shook.</div>
+        <div class="ex-label good">Fix</div>
+        <div class="ex-box good">The headliner drew the largest crowd of the evening. Fans filmed the performance and clips circulated widely on TikTok by midnight.</div>
+      </div>
+
+      <div class="mistake-card">
+        <div class="mistake-head"><div class="mistake-num">6</div><div class="mistake-title">Copying a press release word for word</div></div>
+        <div class="rule-desc" style="margin-top:4px;">A press release is a PR document. Rewrite it. Pull the facts, get an independent quote where possible, add context. The story must read like journalism — not marketing.</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  /* ── NAV ── */
+  function show(id, btn) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    if (btn) btn.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* ── TICKER ── */
+  const REFRESH_MS = 30000;
+  let tickerTimer = null;
+  let isFetching = false;
+
+  function setTickerText(headlines) {
+    const separator = ' \u00a0\u00a0\u2022\u00a0\u00a0 ';
+    const text = headlines.join(separator) + separator;
+    // Double the text so the CSS loop is seamless
+    const s1 = document.getElementById('tickerSpan1');
+    const s2 = document.getElementById('tickerSpan2');
+    s1.textContent = text;
+    s2.textContent = text;
+
+    // Adjust animation speed to text length (roughly 80px per second)
+    const track = document.getElementById('tickerTrack');
+    const duration = Math.max(18, Math.round(text.length * 0.18));
+    track.style.animation = 'none';
+    // Force reflow then restart
+    void track.offsetWidth;
+    track.style.animation = `ticker ${duration}s linear infinite`;
+  }
+
+  function setTickerStatus(msg) {
+    document.getElementById('tickerSpan1').textContent = msg;
+    document.getElementById('tickerSpan2').textContent = msg;
+  }
+
+  async function fetchNews() {
+    if (isFetching) return;
+    isFetching = true;
+    document.getElementById('tickerLabel').textContent = '...';
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          messages: [{
+            role: 'user',
+            content: `Search for the latest entertainment news from Kenya, Western Kenya, and Africa right now. 
+Focus on: music releases, concerts, film, TV, celebrity news, award shows.
+Return ONLY a JSON array of exactly 8 short headline strings (max 12 words each). 
+No preamble, no markdown, no explanation. Just the raw JSON array.
+Example format: ["Headline one here", "Headline two here"]`
+          }]
+        })
+      });
+
+      const data = await res.json();
+
+      // Find the final text block (after tool use)
+      let raw = '';
+      for (const block of data.content) {
+        if (block.type === 'text') raw = block.text;
+      }
+
+      // Strip any markdown fences
+      raw = raw.replace(/```json|```/g, '').trim();
+
+      // Extract JSON array even if there's surrounding text
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (!match) throw new Error('No JSON array found in response');
+
+      const headlines = JSON.parse(match[0]);
+      if (!Array.isArray(headlines) || headlines.length === 0) throw new Error('Empty array');
+
+      setTickerText(headlines);
+      document.getElementById('tickerLabel').textContent = 'LIVE';
+
+    } catch (err) {
+      console.error('Ticker fetch failed:', err);
+      setTickerStatus('Could not load headlines — retrying in 30s');
+      document.getElementById('tickerLabel').textContent = 'LIVE';
+    }
+
+    isFetching = false;
+  }
+
+  // Kick off immediately, then every 30 seconds
+  fetchNews();
+  tickerTimer = setInterval(fetchNews, REFRESH_MS);
+</script>
+</body>
+</html>
