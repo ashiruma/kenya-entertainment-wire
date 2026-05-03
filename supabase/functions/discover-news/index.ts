@@ -167,11 +167,15 @@ Deno.serve(async (req) => {
 
     // Filter to entertainment-ish keywords (very loose) and de-dupe
     const ent = /(music|song|album|artist|concert|festival|film|movie|tv|drama|celeb|actor|actress|singer|rapper|dj|netflix|show|premiere|award|nomin|tour|gospel|gengetone|bongo|afrobeat|comedy|comedian|podcast|tiktok|youtube|fashion|culture|nightlife|club|dance|theatre|theater|play|sauti|nyashinski|khaligraph|bahati|otile|sde|mpasho)/i;
+    // Hard exclude politics, hard news, crime, business/finance noise
+    const politicsBlock = /(politic|election|parliament|senate|senator|mp\b|governor|president|ruto|raila|uhuru|kenyatta|odinga|cabinet|ministry|minister|impeach|bill\s|county\s+assembly|azimio|kenya\s+kwanza|udaa?|orange\s+democratic|wiper|jubilee|ford\s+kenya|protest|maandamano|gen[\s-]?z\s+protest|ethnic|tribal|war|terror|al[-\s]?shabaab|coup|sanction|diplomat|treaty|geopolit|military|army\s|police\s+kill|murder|assassinat|corruption|graft|scandal|court\s+case|judge|judiciary|supreme\s+court|high\s+court|kdf|nis\b|dci\b|ipoa)/i;
     const seen = new Set<string>();
     const filtered = items.filter((i) => {
       if (seen.has(i.source_url)) return false;
       seen.add(i.source_url);
-      const looksEntertainment = ent.test(`${i.title} ${i.excerpt}`) || /entertainment|sde|buzz|pulse|mpasho|ghafla|capital/i.test(i.source);
+      const blob = `${i.title} ${i.excerpt}`;
+      if (politicsBlock.test(blob)) return false;
+      const looksEntertainment = ent.test(blob) || /entertainment|sde|buzz|pulse|mpasho|ghafla|capital/i.test(i.source);
       return looksEntertainment;
     });
 
