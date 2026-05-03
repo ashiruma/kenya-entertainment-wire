@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Masthead } from "@/components/Masthead";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Ban, Trash2, Plus } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Ban, Trash2, Plus, Download, RotateCw, Clock } from "lucide-react";
 
 type Failure = {
   id: string;
@@ -16,16 +16,63 @@ type Failure = {
   last_failed_at: string | null;
   last_success_at: string | null;
   blocked: boolean;
+  next_retry_at?: string | null;
 };
 
 type BlockedDomain = { id: string; domain: string; reason: string | null; created_at: string };
+type ScrapeEvent = { id: string; source_url: string; domain: string; status_code: number | null; success: boolean; error: string | null; created_at: string };
+
+function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
+  if (rows.length === 0) { toast.message("Nothing to export"); return; }
+  const headers = Object.keys(rows[0]);
+  const esc = (v: unknown) => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [headers.join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))].join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function lastRecovery(events: ScrapeEvent[]): string | null {
+  // find most recent transition fail -> success per url's events (passed in order desc)
+  const ordered = [...events].sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at));
+  let lastFail = false;
+  let recovery: string | null = null;
+  for (const e of ordered) {
+    if (!e.success) lastFail = true;
+    else if (e.success && lastFail) { recovery = e.created_at; lastFail = false; }
+  }
+  return recovery;
+}
+
+function Sparkline({ events }: { events: ScrapeEvent[] }) {
+  const last = events.slice(0, 24).reverse(); // chronological
+  if (last.length === 0) return <span className="text-ink-light text-[10px]">no events</span>;
+  return (
+    <div className="flex items-end gap-[2px] h-5">
+      {last.map((e) => (
+        <div
+          key={e.id}
+          title={`${new Date(e.created_at).toLocaleString()} — ${e.success ? "OK" : `FAIL ${e.status_code ?? ""}`}`}
+          className={`w-1.5 rounded-sm ${e.success ? "bg-primary" : "bg-destructive"}`}
+          style={{ height: e.success ? "100%" : "55%" }}
+        />
+      ))}
+    </div>
+  );
+}
 
 export default function ScrapeHealth() {
   const { user, isEditor, loading } = useAuth();
   const navigate = useNavigate();
   const [failures, setFailures] = useState<Failure[]>([]);
   const [blocklist, setBlocklist] = useState<BlockedDomain[]>([]);
+  const [events, setEvents] = useState<ScrapeEvent[]>([]);
   const [newDomain, setNewDomain] = useState("");
+  const [retryingUrl, setRetryingUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -44,12 +91,14 @@ export default function ScrapeHealth() {
   }
 
   async function load() {
-    const [f, b] = await Promise.all([
+    const [f, b, e] = await Promise.all([
       supabase.from("scrape_failures").select("*").order("last_failed_at", { ascending: false, nullsFirst: false }).limit(200),
       supabase.from("scrape_blocklist").select("*").order("created_at", { ascending: false }),
+      supabase.from("scrape_events").select("*").order("created_at", { ascending: false }).limit(2000),
     ]);
     setFailures((f.data as Failure[]) || []);
     setBlocklist((b.data as BlockedDomain[]) || []);
+    setEvents((e.data as ScrapeEvent[]) || []);
   }
 
   async function addBlock() {
@@ -63,6 +112,33 @@ export default function ScrapeHealth() {
     const { error } = await supabase.from("scrape_blocklist").delete().eq("id", id);
     if (error) toast.error(error.message); else { toast.success("Removed"); load(); }
   }
+
+  async function retry(url: string) {
+    setRetryingUrl(url);
+    try {
+      // Clear backoff so the request goes through immediately
+      await supabase.from("scrape_failures").update({ next_retry_at: null }).eq("source_url", url);
+      const { data, error } = await supabase.functions.invoke("scrape-article", { body: { url } });
+      if (error) throw error;
+      if (data?.success) toast.success("Scrape succeeded");
+      else toast.warning(`Still failing: ${data?.error ?? "unknown"}`);
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Retry failed");
+    } finally {
+      setRetryingUrl(null);
+    }
+  }
+
+  const eventsByUrl = useMemo(() => {
+    const map = new Map<string, ScrapeEvent[]>();
+    for (const ev of events) {
+      const arr = map.get(ev.source_url) || [];
+      arr.push(ev);
+      map.set(ev.source_url, arr);
+    }
+    return map;
+  }, [events]);
 
   const failed = failures.filter((f) => !f.last_success_at || (f.last_failed_at && new Date(f.last_failed_at) > new Date(f.last_success_at || 0)));
   const succeeded = failures.filter((f) => f.last_success_at && (!f.last_failed_at || new Date(f.last_success_at) >= new Date(f.last_failed_at || 0)));
@@ -78,9 +154,17 @@ export default function ScrapeHealth() {
         </div>
 
         <section>
-          <div className="flex items-baseline gap-2 mb-3">
-            <AlertTriangle size={16} className="text-destructive" />
-            <h2 className="font-display text-xl">Recent failures ({failed.length})</h2>
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <div className="flex items-baseline gap-2">
+              <AlertTriangle size={16} className="text-destructive" />
+              <h2 className="font-display text-xl">Recent failures ({failed.length})</h2>
+            </div>
+            <button
+              onClick={() => downloadCsv(`scrape-failures-${new Date().toISOString().slice(0,10)}.csv`, failures as unknown as Record<string, unknown>[])}
+              className="text-xs flex items-center gap-1.5 px-2.5 py-1.5 border border-border rounded hover:bg-muted"
+            >
+              <Download size={12} /> Export CSV
+            </button>
           </div>
           <div className="bg-card border border-border rounded overflow-hidden">
             <table className="w-full text-xs">
@@ -92,11 +176,16 @@ export default function ScrapeHealth() {
                   <th className="px-3 py-2 font-medium">Error</th>
                   <th className="px-3 py-2 font-medium text-center">Fails</th>
                   <th className="px-3 py-2 font-medium">Last failed</th>
-                  <th className="px-3 py-2 font-medium">Last success</th>
+                  <th className="px-3 py-2 font-medium">Last recovery</th>
+                  <th className="px-3 py-2 font-medium">Timeline</th>
+                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
-                {failed.map((f) => (
+                {failed.map((f) => {
+                  const evs = eventsByUrl.get(f.source_url) || [];
+                  const recovery = lastRecovery(evs);
+                  return (
                   <tr key={f.id} className="border-t border-border">
                     <td className="px-3 py-2 max-w-[260px] truncate"><a href={f.source_url} target="_blank" rel="noreferrer" className="hover:text-primary">{f.source_url}</a></td>
                     <td className="px-3 py-2 font-mono">{f.domain}</td>
@@ -108,11 +197,24 @@ export default function ScrapeHealth() {
                     <td className="px-3 py-2 text-ink-mid max-w-[200px] truncate">{f.last_error || "—"}</td>
                     <td className="px-3 py-2 text-center">{f.fail_count}</td>
                     <td className="px-3 py-2 text-ink-light">{f.last_failed_at ? new Date(f.last_failed_at).toLocaleString() : "—"}</td>
-                    <td className="px-3 py-2 text-ink-light">{f.last_success_at ? new Date(f.last_success_at).toLocaleString() : "Never"}</td>
+                    <td className="px-3 py-2 text-ink-light">{recovery ? new Date(recovery).toLocaleString() : (f.last_success_at ? new Date(f.last_success_at).toLocaleString() : "Never")}</td>
+                    <td className="px-3 py-2"><Sparkline events={evs} /></td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={() => retry(f.source_url)}
+                        disabled={retryingUrl === f.source_url}
+                        className="inline-flex items-center gap-1 text-[11px] px-2 py-1 border border-border rounded hover:bg-muted disabled:opacity-50"
+                        title={f.next_retry_at ? `Backoff until ${new Date(f.next_retry_at).toLocaleString()}` : "Scrape now"}
+                      >
+                        <RotateCw size={11} className={retryingUrl === f.source_url ? "animate-spin" : ""} />
+                        Scrape now
+                      </button>
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {failed.length === 0 && (
-                  <tr><td colSpan={7} className="px-3 py-8 text-center text-ink-light">No failures recorded.</td></tr>
+                  <tr><td colSpan={9} className="px-3 py-8 text-center text-ink-light">No failures recorded.</td></tr>
                 )}
               </tbody>
             </table>
@@ -120,15 +222,27 @@ export default function ScrapeHealth() {
         </section>
 
         <section>
-          <div className="flex items-baseline gap-2 mb-3">
-            <CheckCircle2 size={16} className="text-primary" />
-            <h2 className="font-display text-xl">Healthy sources ({succeeded.length})</h2>
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <div className="flex items-baseline gap-2">
+              <CheckCircle2 size={16} className="text-primary" />
+              <h2 className="font-display text-xl">Healthy sources ({succeeded.length})</h2>
+            </div>
+            <button
+              onClick={() => downloadCsv(`healthy-sources-${new Date().toISOString().slice(0,10)}.csv`, succeeded as unknown as Record<string, unknown>[])}
+              className="text-xs flex items-center gap-1.5 px-2.5 py-1.5 border border-border rounded hover:bg-muted"
+            >
+              <Download size={12} /> Export CSV
+            </button>
           </div>
-          <div className="bg-card border border-border rounded p-3 text-xs text-ink-mid grid sm:grid-cols-2 gap-1">
+          <div className="bg-card border border-border rounded p-3 text-xs text-ink-mid grid sm:grid-cols-2 gap-2">
             {succeeded.slice(0, 30).map((s) => (
-              <div key={s.id} className="flex justify-between gap-2">
-                <span className="font-mono truncate">{s.domain}</span>
-                <span className="text-ink-light flex-shrink-0">{s.last_success_at && new Date(s.last_success_at).toLocaleDateString()}</span>
+              <div key={s.id} className="flex items-center justify-between gap-2">
+                <span className="font-mono truncate flex-1">{s.domain}</span>
+                <Sparkline events={eventsByUrl.get(s.source_url) || []} />
+                <span className="text-ink-light flex-shrink-0 flex items-center gap-1"><Clock size={10} />{s.last_success_at && new Date(s.last_success_at).toLocaleDateString()}</span>
+                <button onClick={() => retry(s.source_url)} disabled={retryingUrl === s.source_url} className="text-ink-light hover:text-primary disabled:opacity-50" title="Scrape now">
+                  <RotateCw size={11} className={retryingUrl === s.source_url ? "animate-spin" : ""} />
+                </button>
               </div>
             ))}
             {succeeded.length === 0 && <div className="text-ink-light">None yet.</div>}
@@ -136,9 +250,17 @@ export default function ScrapeHealth() {
         </section>
 
         <section>
-          <div className="flex items-baseline gap-2 mb-3">
-            <Ban size={16} className="text-destructive" />
-            <h2 className="font-display text-xl">Blocklist ({blocklist.length})</h2>
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <div className="flex items-baseline gap-2">
+              <Ban size={16} className="text-destructive" />
+              <h2 className="font-display text-xl">Blocklist ({blocklist.length})</h2>
+            </div>
+            <button
+              onClick={() => downloadCsv(`blocklist-${new Date().toISOString().slice(0,10)}.csv`, blocklist as unknown as Record<string, unknown>[])}
+              className="text-xs flex items-center gap-1.5 px-2.5 py-1.5 border border-border rounded hover:bg-muted"
+            >
+              <Download size={12} /> Export CSV
+            </button>
           </div>
           <div className="flex gap-2 mb-3">
             <input
