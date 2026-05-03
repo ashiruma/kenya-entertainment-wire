@@ -81,6 +81,9 @@ async function fetchFeed(url: string, source: string) {
       const desc = stripTags(pick(block, "description") || pick(block, "summary") || pick(block, "content:encoded") || "");
       const pub = pick(block, "pubDate") || pick(block, "published") || pick(block, "updated");
       const image = pickImage(block);
+      const author = stripTags(
+        pick(block, "dc:creator") || pick(block, "author") || pick(block, "creator") || ""
+      ) || null;
       const blob = `${title} ${desc}`;
       return {
         title,
@@ -88,6 +91,7 @@ async function fetchFeed(url: string, source: string) {
         source_url: link,
         excerpt: desc.slice(0, 400),
         image_url: image,
+        author,
         category: "entertainment",
         region: detectRegion(blob),
         published_at: pub ? new Date(pub).toISOString() : null,

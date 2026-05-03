@@ -9,6 +9,30 @@ function getDomain(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
 }
 
+// In-memory per-domain rate limiter (per edge instance).
+const domainGate = new Map<string, { lastHit: number; minGapMs: number }>();
+const DEFAULT_GAP_MS = 1500;
+const MAX_GAP_MS = 60_000;
+
+async function gateDomain(domain: string) {
+  const now = Date.now();
+  const g = domainGate.get(domain) || { lastHit: 0, minGapMs: DEFAULT_GAP_MS };
+  const wait = g.lastHit + g.minGapMs - now;
+  if (wait > 0) await new Promise((r) => setTimeout(r, Math.min(wait, 8000)));
+  g.lastHit = Date.now();
+  domainGate.set(domain, g);
+}
+
+function bumpBackoff(domain: string) {
+  const g = domainGate.get(domain) || { lastHit: Date.now(), minGapMs: DEFAULT_GAP_MS };
+  g.minGapMs = Math.min(MAX_GAP_MS, Math.max(DEFAULT_GAP_MS, g.minGapMs * 2));
+  domainGate.set(domain, g);
+}
+
+function resetBackoff(domain: string) {
+  domainGate.set(domain, { lastHit: Date.now(), minGapMs: DEFAULT_GAP_MS });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -48,10 +72,25 @@ Deno.serve(async (req) => {
         last_failed_at: new Date().toISOString(),
         fail_count: 1,
       }, { onConflict: "source_url" });
+      await supabase.from("scrape_events").insert({
+        source_url: url, domain, status_code: 0, success: false, error: "BLOCKLISTED",
+      });
       return new Response(JSON.stringify({
         success: false, fallback: true, error: "DOMAIN_BLOCKLISTED", content: "",
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
+    // Per-domain backoff: respect next_retry_at if set
+    const { data: existingFail } = await supabase
+      .from("scrape_failures").select("fail_count, next_retry_at").eq("source_url", url).maybeSingle();
+    if (existingFail?.next_retry_at && new Date(existingFail.next_retry_at) > new Date()) {
+      return new Response(JSON.stringify({
+        success: false, fallback: true, error: "BACKOFF_ACTIVE",
+        retry_after: existingFail.next_retry_at, content: "",
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    await gateDomain(domain);
 
     const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
     if (!FIRECRAWL_API_KEY) {
@@ -71,11 +110,17 @@ Deno.serve(async (req) => {
       });
     } catch (netErr) {
       console.warn(`Firecrawl network error for ${url}:`, netErr);
+      bumpBackoff(domain);
       await supabase.from("scrape_failures").upsert({
         source_url: url, domain, last_status_code: 0,
         last_error: `NETWORK: ${netErr instanceof Error ? netErr.message : "unknown"}`,
         last_failed_at: new Date().toISOString(), fail_count: 1,
+        next_retry_at: new Date(Date.now() + 60_000).toISOString(),
       }, { onConflict: "source_url" });
+      await supabase.from("scrape_events").insert({
+        source_url: url, domain, status_code: 0, success: false,
+        error: netErr instanceof Error ? netErr.message.slice(0, 300) : "network",
+      });
       return new Response(JSON.stringify({ success: false, fallback: true, error: "NETWORK_ERROR", content: "" }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -96,17 +141,27 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Log failure (preserves last_success_at via upsert)
-      const { data: existing } = await supabase
-        .from("scrape_failures").select("fail_count").eq("source_url", url).maybeSingle();
+      // Bump exponential backoff on 429/5xx; longer cooldown on 403/402
+      bumpBackoff(domain);
+      const failCount = (existingFail?.fail_count || 0) + 1;
+      const backoffMs =
+        fcRes.status === 429 ? Math.min(15 * 60_000, 30_000 * 2 ** Math.min(failCount, 5)) :
+        fcRes.status === 402 ? 60 * 60_000 :
+        fcRes.status === 403 ? 24 * 60 * 60_000 :
+        Math.min(10 * 60_000, 15_000 * 2 ** Math.min(failCount, 5));
       await supabase.from("scrape_failures").upsert({
         source_url: url, domain,
         last_status_code: fcRes.status,
         last_error: String(errMsg).slice(0, 500),
-        fail_count: (existing?.fail_count || 0) + 1,
+        fail_count: failCount,
         last_failed_at: new Date().toISOString(),
+        next_retry_at: new Date(Date.now() + backoffMs).toISOString(),
         blocked: fcRes.status === 403,
       }, { onConflict: "source_url" });
+      await supabase.from("scrape_events").insert({
+        source_url: url, domain, status_code: fcRes.status, success: false,
+        error: String(errMsg).slice(0, 300),
+      });
 
       const errorCode =
         fcRes.status === 402 ? "CREDITS_EXHAUSTED" :
@@ -127,13 +182,18 @@ Deno.serve(async (req) => {
       await supabase.from("discovered_stories").update({ raw_content: trimmed }).eq("id", story_id);
     }
 
+    resetBackoff(domain);
     // Record success
     await supabase.from("scrape_failures").upsert({
       source_url: url, domain,
       last_status_code: 200, last_error: null,
       last_success_at: new Date().toISOString(),
+      next_retry_at: null,
       blocked: false, fail_count: 0,
     }, { onConflict: "source_url" });
+    await supabase.from("scrape_events").insert({
+      source_url: url, domain, status_code: 200, success: true, error: null,
+    });
 
     return new Response(JSON.stringify({ success: true, content: trimmed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
