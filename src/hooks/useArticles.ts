@@ -1,6 +1,6 @@
 // src/hooks/useArticles.ts
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/integrations/supabase/client'
 
 export function useArticles() {
   const [articles, setArticles] = useState([])
