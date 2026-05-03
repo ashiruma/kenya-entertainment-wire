@@ -152,12 +152,15 @@ Deno.serve(async (req) => {
 
     // Fetch all RSS feeds + Firecrawl search queries in parallel
     const SEARCH_QUERIES = [
-      "Kenya entertainment news today",
-      "Western Kenya music event Kakamega Kisumu Bungoma",
-      "Kenyan celebrity news this week",
-      "Kenyan music release new song",
-      "Luhya Luo artist Kenya",
-      "Kenya film TV show premiere",
+      "Kenya entertainment celebrity news today -politics -election",
+      "Western Kenya music event Kakamega Kisumu Bungoma concert",
+      "Kenyan celebrity gossip showbiz this week",
+      "Kenyan new music release song album",
+      "Luhya Luo artist musician Kenya",
+      "Kenya film TV show Netflix premiere",
+      "Nairobi nightlife festival lineup",
+      "Kenyan comedian podcast TikTok trending",
+      "Gengetone Bongo Afrobeats new release Kenya",
     ];
     const [rss, search] = await Promise.all([
       Promise.all(FEEDS.map((f) => fetchFeed(f.url, f.source))).then((r) => r.flat()),
