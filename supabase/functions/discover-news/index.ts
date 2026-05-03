@@ -9,18 +9,13 @@ const corsHeaders = {
 // Curated Kenyan + East African entertainment RSS feeds. Western Kenya focus via region tagging.
 const FEEDS = [
   { url: "https://www.pulselive.co.ke/entertainment/rss", source: "Pulse Live Kenya" },
-  { url: "https://www.pulselive.co.ke/rss", source: "Pulse Live Kenya" },
   { url: "https://mpasho.co.ke/feed/", source: "Mpasho" },
   { url: "https://www.standardmedia.co.ke/rss/entertainment.php", source: "Standard SDE" },
-  { url: "https://www.standardmedia.co.ke/rss/headlines.php", source: "Standard" },
-  { url: "https://nation.africa/kenya/rss.xml", source: "Nation Africa" },
-  { url: "https://citizen.digital/feed", source: "Citizen Digital" },
-  { url: "https://www.tuko.co.ke/rss/all.rss", source: "Tuko" },
-  { url: "https://www.kenyans.co.ke/feeds/news", source: "Kenyans.co.ke" },
   { url: "https://www.ghafla.com/ke/feed/", source: "Ghafla Kenya" },
-  { url: "https://www.the-star.co.ke/rss/", source: "The Star" },
   { url: "https://www.capitalfm.co.ke/entertainment/feed/", source: "Capital FM" },
   { url: "https://www.bizna.co.ke/category/entertainment/feed/", source: "Bizna Kenya" },
+  { url: "https://www.tuko.co.ke/entertainment/rss/", source: "Tuko Entertainment" },
+  { url: "https://nation.africa/kenya/life-and-style/rss.xml", source: "Nation Life & Style" },
 ];
 
 const WESTERN_KENYA_KEYWORDS = [
@@ -152,12 +147,15 @@ Deno.serve(async (req) => {
 
     // Fetch all RSS feeds + Firecrawl search queries in parallel
     const SEARCH_QUERIES = [
-      "Kenya entertainment news today",
-      "Western Kenya music event Kakamega Kisumu Bungoma",
-      "Kenyan celebrity news this week",
-      "Kenyan music release new song",
-      "Luhya Luo artist Kenya",
-      "Kenya film TV show premiere",
+      "Kenya entertainment celebrity news today -politics -election",
+      "Western Kenya music event Kakamega Kisumu Bungoma concert",
+      "Kenyan celebrity gossip showbiz this week",
+      "Kenyan new music release song album",
+      "Luhya Luo artist musician Kenya",
+      "Kenya film TV show Netflix premiere",
+      "Nairobi nightlife festival lineup",
+      "Kenyan comedian podcast TikTok trending",
+      "Gengetone Bongo Afrobeats new release Kenya",
     ];
     const [rss, search] = await Promise.all([
       Promise.all(FEEDS.map((f) => fetchFeed(f.url, f.source))).then((r) => r.flat()),
@@ -167,11 +165,15 @@ Deno.serve(async (req) => {
 
     // Filter to entertainment-ish keywords (very loose) and de-dupe
     const ent = /(music|song|album|artist|concert|festival|film|movie|tv|drama|celeb|actor|actress|singer|rapper|dj|netflix|show|premiere|award|nomin|tour|gospel|gengetone|bongo|afrobeat|comedy|comedian|podcast|tiktok|youtube|fashion|culture|nightlife|club|dance|theatre|theater|play|sauti|nyashinski|khaligraph|bahati|otile|sde|mpasho)/i;
+    // Hard exclude politics, hard news, crime, business/finance noise
+    const politicsBlock = /(politic|election|parliament|senate|senator|mp\b|governor|president|ruto|raila|uhuru|kenyatta|odinga|cabinet|ministry|minister|impeach|bill\s|county\s+assembly|azimio|kenya\s+kwanza|udaa?|orange\s+democratic|wiper|jubilee|ford\s+kenya|protest|maandamano|gen[\s-]?z\s+protest|ethnic|tribal|war|terror|al[-\s]?shabaab|coup|sanction|diplomat|treaty|geopolit|military|army\s|police\s+kill|murder|assassinat|corruption|graft|scandal|court\s+case|judge|judiciary|supreme\s+court|high\s+court|kdf|nis\b|dci\b|ipoa)/i;
     const seen = new Set<string>();
     const filtered = items.filter((i) => {
       if (seen.has(i.source_url)) return false;
       seen.add(i.source_url);
-      const looksEntertainment = ent.test(`${i.title} ${i.excerpt}`) || /entertainment|sde|buzz|pulse|mpasho|ghafla|capital/i.test(i.source);
+      const blob = `${i.title} ${i.excerpt}`;
+      if (politicsBlock.test(blob)) return false;
+      const looksEntertainment = ent.test(blob) || /entertainment|sde|buzz|pulse|mpasho|ghafla|capital/i.test(i.source);
       return looksEntertainment;
     });
 
