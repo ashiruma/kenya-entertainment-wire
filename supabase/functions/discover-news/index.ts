@@ -9,18 +9,13 @@ const corsHeaders = {
 // Curated Kenyan + East African entertainment RSS feeds. Western Kenya focus via region tagging.
 const FEEDS = [
   { url: "https://www.pulselive.co.ke/entertainment/rss", source: "Pulse Live Kenya" },
-  { url: "https://www.pulselive.co.ke/rss", source: "Pulse Live Kenya" },
   { url: "https://mpasho.co.ke/feed/", source: "Mpasho" },
   { url: "https://www.standardmedia.co.ke/rss/entertainment.php", source: "Standard SDE" },
-  { url: "https://www.standardmedia.co.ke/rss/headlines.php", source: "Standard" },
-  { url: "https://nation.africa/kenya/rss.xml", source: "Nation Africa" },
-  { url: "https://citizen.digital/feed", source: "Citizen Digital" },
-  { url: "https://www.tuko.co.ke/rss/all.rss", source: "Tuko" },
-  { url: "https://www.kenyans.co.ke/feeds/news", source: "Kenyans.co.ke" },
   { url: "https://www.ghafla.com/ke/feed/", source: "Ghafla Kenya" },
-  { url: "https://www.the-star.co.ke/rss/", source: "The Star" },
   { url: "https://www.capitalfm.co.ke/entertainment/feed/", source: "Capital FM" },
   { url: "https://www.bizna.co.ke/category/entertainment/feed/", source: "Bizna Kenya" },
+  { url: "https://www.tuko.co.ke/entertainment/rss/", source: "Tuko Entertainment" },
+  { url: "https://nation.africa/kenya/life-and-style/rss.xml", source: "Nation Life & Style" },
 ];
 
 const WESTERN_KENYA_KEYWORDS = [
