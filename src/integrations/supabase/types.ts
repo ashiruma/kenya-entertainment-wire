@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       discovered_stories: {
         Row: {
+          author: string | null
           category: string | null
           created_at: string
           excerpt: string | null
@@ -30,6 +31,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          author?: string | null
           category?: string | null
           created_at?: string
           excerpt?: string | null
@@ -44,6 +46,7 @@ export type Database = {
           title: string
         }
         Update: {
+          author?: string | null
           category?: string | null
           created_at?: string
           excerpt?: string | null
@@ -175,6 +178,36 @@ export type Database = {
         }
         Relationships: []
       }
+      scrape_events: {
+        Row: {
+          created_at: string
+          domain: string
+          error: string | null
+          id: string
+          source_url: string
+          status_code: number | null
+          success: boolean
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          error?: string | null
+          id?: string
+          source_url: string
+          status_code?: number | null
+          success?: boolean
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          error?: string | null
+          id?: string
+          source_url?: string
+          status_code?: number | null
+          success?: boolean
+        }
+        Relationships: []
+      }
       scrape_failures: {
         Row: {
           blocked: boolean
@@ -186,6 +219,7 @@ export type Database = {
           last_failed_at: string | null
           last_status_code: number | null
           last_success_at: string | null
+          next_retry_at: string | null
           source_url: string
           updated_at: string
         }
@@ -199,6 +233,7 @@ export type Database = {
           last_failed_at?: string | null
           last_status_code?: number | null
           last_success_at?: string | null
+          next_retry_at?: string | null
           source_url: string
           updated_at?: string
         }
@@ -212,6 +247,7 @@ export type Database = {
           last_failed_at?: string | null
           last_status_code?: number | null
           last_success_at?: string | null
+          next_retry_at?: string | null
           source_url?: string
           updated_at?: string
         }
