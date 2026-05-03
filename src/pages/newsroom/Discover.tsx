@@ -86,6 +86,17 @@ export default function Discover() {
         toast.message("Using RSS excerpt", { description: "Source page couldn't be scraped — drafting from feed data." });
       }
 
+      // If RSS didn't supply a hero image, try alternative photo sources
+      let heroImage = story.image_url;
+      if (!heroImage) {
+        try {
+          const { data: img } = await supabase.functions.invoke("find-image", {
+            body: { query: story.title, headline: story.title },
+          });
+          if (img?.success && img?.image?.url) heroImage = img.image.url;
+        } catch { /* non-fatal */ }
+      }
+
       const { data, error } = await supabase.functions.invoke("write-article", {
         body: {
           source_title: story.title,
@@ -107,7 +118,7 @@ export default function Discover() {
         body: a.body,
         category: a.category,
         region: story.region,
-        hero_image_url: story.image_url,
+        hero_image_url: heroImage,
         twitter_post: a.twitter_post,
         instagram_post: a.instagram_post,
         facebook_post: a.facebook_post,
