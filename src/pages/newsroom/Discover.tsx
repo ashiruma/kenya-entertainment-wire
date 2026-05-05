@@ -119,6 +119,8 @@ export default function Discover() {
         category: a.category,
         region: story.region,
         hero_image_url: heroImage,
+        social_image_url: heroImage,
+        byline: user.user_metadata?.display_name || user.email?.split("@")[0] || "Amaica Newsroom",
         twitter_post: a.twitter_post,
         instagram_post: a.instagram_post,
         facebook_post: a.facebook_post,
