@@ -32,11 +32,15 @@ export default function Published() {
           {items.length === 0 ? (
             <div className="p-8 text-center text-ink-light">Nothing published yet.</div>
           ) : items.map((d) => (
-            <Link key={d.id} to={`/article/${d.id}`} className="block p-4 hover:bg-muted">
-              <div className="text-[10px] uppercase tracking-widest text-primary mb-1">{d.category} {d.region === "western_kenya" && "· Western KE"}</div>
-              <h2 className="font-display text-lg">{d.headline}</h2>
-              <div className="text-[11px] text-ink-light mt-1">{d.published_at ? new Date(d.published_at).toLocaleString() : ""}</div>
-            </Link>
+            <div key={d.id} className="p-4 hover:bg-muted flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] uppercase tracking-widest text-primary mb-1">{d.category} {d.region === "western_kenya" && "· Western KE"}</div>
+                <h2 className="font-display text-lg">{d.headline}</h2>
+                <div className="text-[11px] text-ink-light mt-1">{d.published_at ? new Date(d.published_at).toLocaleString() : ""}</div>
+              </div>
+              <Link to={`/article/${d.id}`} className="text-xs text-ink-light hover:text-primary px-2 py-1">View</Link>
+              <Link to={`/newsroom/draft/${d.id}`} className="text-xs bg-primary text-primary-foreground px-3 py-1.5 rounded font-medium hover:bg-primary-mid">Edit</Link>
+            </div>
           ))}
         </div>
       </main>
