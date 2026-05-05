@@ -66,6 +66,7 @@ export type Database = {
         Row: {
           author_id: string
           body: string | null
+          byline: string | null
           category: string | null
           created_at: string
           facebook_post: string | null
@@ -76,15 +77,20 @@ export type Database = {
           lede: string | null
           published_at: string | null
           region: string | null
+          social_image_url: string | null
           source_story_id: string | null
           status: string
           template_type: string
           twitter_post: string | null
           updated_at: string
+          wordpress_post_id: string | null
+          wordpress_post_url: string | null
+          wordpress_published_at: string | null
         }
         Insert: {
           author_id: string
           body?: string | null
+          byline?: string | null
           category?: string | null
           created_at?: string
           facebook_post?: string | null
@@ -95,15 +101,20 @@ export type Database = {
           lede?: string | null
           published_at?: string | null
           region?: string | null
+          social_image_url?: string | null
           source_story_id?: string | null
           status?: string
           template_type?: string
           twitter_post?: string | null
           updated_at?: string
+          wordpress_post_id?: string | null
+          wordpress_post_url?: string | null
+          wordpress_published_at?: string | null
         }
         Update: {
           author_id?: string
           body?: string | null
+          byline?: string | null
           category?: string | null
           created_at?: string
           facebook_post?: string | null
@@ -114,11 +125,15 @@ export type Database = {
           lede?: string | null
           published_at?: string | null
           region?: string | null
+          social_image_url?: string | null
           source_story_id?: string | null
           status?: string
           template_type?: string
           twitter_post?: string | null
           updated_at?: string
+          wordpress_post_id?: string | null
+          wordpress_post_url?: string | null
+          wordpress_published_at?: string | null
         }
         Relationships: [
           {
