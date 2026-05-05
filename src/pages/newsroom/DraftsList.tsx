@@ -18,16 +18,17 @@ type Draft = {
 export default function DraftsList() {
   const { user, loading } = useAuth();
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [showPublished, setShowPublished] = useState(false);
 
   useEffect(() => {
     if (!user) return;
-    supabase
+    let q = supabase
       .from("drafts")
       .select("id, headline, category, region, status, template_type, updated_at")
-      .neq("status", "published")
-      .order("updated_at", { ascending: false })
-      .then(({ data }) => setDrafts(data || []));
-  }, [user]);
+      .order("updated_at", { ascending: false });
+    if (!showPublished) q = q.neq("status", "published");
+    q.then(({ data }) => setDrafts(data || []));
+  }, [user, showPublished]);
 
   if (loading) return <div className="min-h-screen bg-background" />;
   if (!user) return <Navigate to="/auth" replace />;
@@ -36,9 +37,15 @@ export default function DraftsList() {
     <div className="min-h-screen bg-background">
       <Masthead variant="newsroom" />
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-6">
-          <div className="label-eyebrow text-primary mb-1">Newsroom · Drafts</div>
-          <h1 className="font-display text-3xl">Working stories</h1>
+        <div className="mb-6 flex items-end justify-between gap-3 flex-wrap">
+          <div>
+            <div className="label-eyebrow text-primary mb-1">Newsroom · Drafts</div>
+            <h1 className="font-display text-3xl">Working stories</h1>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-ink-mid">
+            <input type="checkbox" checked={showPublished} onChange={(e) => setShowPublished(e.target.checked)} />
+            Include published (edit live posts)
+          </label>
         </div>
 
         {drafts.length === 0 ? (
