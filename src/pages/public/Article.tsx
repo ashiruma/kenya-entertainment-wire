@@ -13,6 +13,7 @@ type Article = {
   region: string;
   hero_image_url: string | null;
   published_at: string | null;
+  byline: string | null;
 };
 
 export default function PublicArticle() {
@@ -22,7 +23,7 @@ export default function PublicArticle() {
 
   useEffect(() => {
     if (!id) return;
-    supabase.from("drafts").select("id, headline, lede, body, category, region, hero_image_url, published_at")
+    supabase.from("drafts").select("id, headline, lede, body, category, region, hero_image_url, published_at, byline")
       .eq("id", id).eq("status", "published").maybeSingle()
       .then(({ data }) => { if (data) setArticle(data as Article); else setNotFound(true); });
   }, [id]);
@@ -49,7 +50,7 @@ export default function PublicArticle() {
         <h1 className="font-display text-4xl md:text-5xl leading-[1.1] mb-4">{article.headline}</h1>
         {article.lede && <p className="text-xl text-ink-mid leading-relaxed mb-6 font-light">{article.lede}</p>}
         <div className="flex items-center gap-3 pb-6 mb-8 border-b border-border text-[11px] font-mono uppercase tracking-wider text-ink-light">
-          <span>By Amaica Newsroom</span><span>·</span>
+          <span>By {article.byline || "Amaica Newsroom"}</span><span>·</span>
           <span>{article.published_at && new Date(article.published_at).toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" })}</span>
         </div>
         {article.hero_image_url && <img src={article.hero_image_url} alt={article.headline} className="w-full aspect-[16/9] object-cover rounded mb-8" />}
