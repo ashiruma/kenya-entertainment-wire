@@ -65,6 +65,8 @@ export type Database = {
       drafts: {
         Row: {
           author_id: string
+          auto_publish_at: string | null
+          auto_publish_enabled: boolean
           body: string | null
           byline: string | null
           category: string | null
@@ -83,12 +85,15 @@ export type Database = {
           template_type: string
           twitter_post: string | null
           updated_at: string
+          wordpress_last_error: string | null
           wordpress_post_id: string | null
           wordpress_post_url: string | null
           wordpress_published_at: string | null
         }
         Insert: {
           author_id: string
+          auto_publish_at?: string | null
+          auto_publish_enabled?: boolean
           body?: string | null
           byline?: string | null
           category?: string | null
@@ -107,12 +112,15 @@ export type Database = {
           template_type?: string
           twitter_post?: string | null
           updated_at?: string
+          wordpress_last_error?: string | null
           wordpress_post_id?: string | null
           wordpress_post_url?: string | null
           wordpress_published_at?: string | null
         }
         Update: {
           author_id?: string
+          auto_publish_at?: string | null
+          auto_publish_enabled?: boolean
           body?: string | null
           byline?: string | null
           category?: string | null
@@ -131,6 +139,7 @@ export type Database = {
           template_type?: string
           twitter_post?: string | null
           updated_at?: string
+          wordpress_last_error?: string | null
           wordpress_post_id?: string | null
           wordpress_post_url?: string | null
           wordpress_published_at?: string | null
