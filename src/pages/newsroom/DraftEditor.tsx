@@ -23,6 +23,9 @@ type Draft = {
   facebook_post: string | null;
   status: string;
   wordpress_post_url: string | null;
+  auto_publish_enabled?: boolean;
+  auto_publish_at?: string | null;
+  wordpress_last_error?: string | null;
 };
 
 export default function DraftEditor() {
@@ -62,6 +65,8 @@ export default function DraftEditor() {
         twitter_post: draft.twitter_post,
         instagram_post: draft.instagram_post,
         facebook_post: draft.facebook_post,
+        auto_publish_enabled: draft.auto_publish_enabled ?? false,
+        auto_publish_at: draft.auto_publish_at || null,
         ...(newStatus ? { status: newStatus, ...(newStatus === "published" ? { published_at: new Date().toISOString() } : {}) } : {}),
       }).eq("id", draft.id);
       if (error) throw error;
@@ -111,7 +116,7 @@ export default function DraftEditor() {
           lede: draft.lede,
           byline: draft.byline,
           hero_image_url: draft.hero_image_url,
-          status: "publish",
+          status: "pending",
         },
       });
       if (error) throw error;
@@ -198,6 +203,28 @@ export default function DraftEditor() {
               <ExternalLink size={11} /> View on WordPress
             </a>
           )}
+
+          <div className="bg-card border border-border rounded p-4 shadow-card space-y-2">
+            <div className="label-eyebrow flex items-center gap-1.5"><Globe size={11} /> Auto-publish to WordPress (editorial)</div>
+            <p className="text-[11px] text-ink-light">When enabled, the queue will push this story to WordPress at the scheduled time as <strong>Pending review</strong> so editors can approve it before it goes live.</p>
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={!!draft.auto_publish_enabled}
+                onChange={(e) => update({ auto_publish_enabled: e.target.checked })}
+              />
+              Queue for auto-publish
+            </label>
+            <input
+              type="datetime-local"
+              value={draft.auto_publish_at ? new Date(draft.auto_publish_at).toISOString().slice(0, 16) : ""}
+              onChange={(e) => update({ auto_publish_at: e.target.value ? new Date(e.target.value).toISOString() : null })}
+              className="w-full text-xs bg-muted border border-border rounded px-2 py-1.5"
+            />
+            {draft.wordpress_last_error && (
+              <p className="text-[11px] text-destructive">Last error: {draft.wordpress_last_error}</p>
+            )}
+          </div>
         </div>
 
         <aside className="space-y-4">
