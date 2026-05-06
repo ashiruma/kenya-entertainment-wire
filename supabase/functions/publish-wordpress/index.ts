@@ -37,11 +37,28 @@ Deno.serve(async (req) => {
         const imgRes = await fetch(hero_image_url);
         if (imgRes.ok) {
           const buf = new Uint8Array(await imgRes.arrayBuffer());
-          const ct = imgRes.headers.get("content-type") || "image/jpeg";
-          const ext = ct.includes("png") ? "png" : ct.includes("webp") ? "webp" : "jpg";
+          // Sniff real type from magic bytes — many CDNs return application/octet-stream
+          // which WP rejects ("not allowed to upload this file type").
+          let mime = "image/jpeg";
+          let ext = "jpg";
+          if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+            mime = "image/png"; ext = "png";
+          } else if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+            mime = "image/jpeg"; ext = "jpg";
+          } else if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) {
+            mime = "image/gif"; ext = "gif";
+          } else if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) {
+            mime = "image/webp"; ext = "webp";
+          } else {
+            // Fallback to header-declared type if recognisable
+            const ct = (imgRes.headers.get("content-type") || "").toLowerCase();
+            if (ct.includes("png")) { mime = "image/png"; ext = "png"; }
+            else if (ct.includes("webp")) { mime = "image/webp"; ext = "webp"; }
+            else if (ct.includes("gif")) { mime = "image/gif"; ext = "gif"; }
+          }
           const filename = `amaica-${Date.now()}.${ext}`;
           const fd = new FormData();
-          fd.append("media[]", new Blob([buf as BlobPart], { type: ct }), filename);
+          fd.append("media[]", new Blob([buf as BlobPart], { type: mime }), filename);
           const upRes = await fetch(`${GATEWAY}/rest/v1.1/sites/${siteId}/media/new`, {
             method: "POST",
             headers: gwHeaders(LOVABLE_API_KEY, WORDPRESS_COM_API_KEY),
@@ -65,10 +82,13 @@ Deno.serve(async (req) => {
     const ledeHtml = lede ? `<p><strong>${lede}</strong></p>` : "";
     const content = `${bylineHtml}${ledeHtml}${paragraphs}`;
 
+    // Default to `pending` so editors review on WordPress before going live.
+    const allowed = new Set(["draft", "pending", "publish", "private", "future"]);
+    const wpStatus = allowed.has(status) ? status : "pending";
     const postBody: Record<string, unknown> = {
       title: headline,
       content,
-      status: status === "draft" ? "draft" : "publish",
+      status: wpStatus,
     };
     if (featuredImageId) postBody.featured_image = featuredImageId;
     if (category) postBody.categories = category;
