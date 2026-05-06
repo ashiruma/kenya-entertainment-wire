@@ -111,7 +111,7 @@ export default function DraftEditor() {
           lede: draft.lede,
           byline: draft.byline,
           hero_image_url: draft.hero_image_url,
-          status: "publish",
+          status: "pending",
         },
       });
       if (error) throw error;
