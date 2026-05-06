@@ -23,6 +23,9 @@ type Draft = {
   facebook_post: string | null;
   status: string;
   wordpress_post_url: string | null;
+  auto_publish_enabled?: boolean;
+  auto_publish_at?: string | null;
+  wordpress_last_error?: string | null;
 };
 
 export default function DraftEditor() {
@@ -62,6 +65,8 @@ export default function DraftEditor() {
         twitter_post: draft.twitter_post,
         instagram_post: draft.instagram_post,
         facebook_post: draft.facebook_post,
+        auto_publish_enabled: draft.auto_publish_enabled ?? false,
+        auto_publish_at: draft.auto_publish_at || null,
         ...(newStatus ? { status: newStatus, ...(newStatus === "published" ? { published_at: new Date().toISOString() } : {}) } : {}),
       }).eq("id", draft.id);
       if (error) throw error;
