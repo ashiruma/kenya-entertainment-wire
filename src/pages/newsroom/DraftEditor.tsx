@@ -203,6 +203,28 @@ export default function DraftEditor() {
               <ExternalLink size={11} /> View on WordPress
             </a>
           )}
+
+          <div className="bg-card border border-border rounded p-4 shadow-card space-y-2">
+            <div className="label-eyebrow flex items-center gap-1.5"><Globe size={11} /> Auto-publish to WordPress (editorial)</div>
+            <p className="text-[11px] text-ink-light">When enabled, the queue will push this story to WordPress at the scheduled time as <strong>Pending review</strong> so editors can approve it before it goes live.</p>
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={!!draft.auto_publish_enabled}
+                onChange={(e) => update({ auto_publish_enabled: e.target.checked })}
+              />
+              Queue for auto-publish
+            </label>
+            <input
+              type="datetime-local"
+              value={draft.auto_publish_at ? new Date(draft.auto_publish_at).toISOString().slice(0, 16) : ""}
+              onChange={(e) => update({ auto_publish_at: e.target.value ? new Date(e.target.value).toISOString() : null })}
+              className="w-full text-xs bg-muted border border-border rounded px-2 py-1.5"
+            />
+            {draft.wordpress_last_error && (
+              <p className="text-[11px] text-destructive">Last error: {draft.wordpress_last_error}</p>
+            )}
+          </div>
         </div>
 
         <aside className="space-y-4">
