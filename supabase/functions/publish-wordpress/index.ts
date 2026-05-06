@@ -6,6 +6,7 @@ const corsHeaders = {
 };
 
 const GATEWAY = "https://connector-gateway.lovable.dev/wordpress_com";
+const DEFAULT_SITE = "theashirumanow.wordpress.com";
 
 function gwHeaders(lovKey: string, wpKey: string, extra: Record<string, string> = {}) {
   return {
@@ -26,18 +27,8 @@ Deno.serve(async (req) => {
     const { site_id, headline, body, lede, byline, hero_image_url, category, status } = await req.json();
     if (!headline || !body) throw new Error("headline and body required");
 
-    // 1. Resolve site id — if not supplied, pick the first site the user has.
-    let siteId = (site_id || "").toString().trim();
-    if (!siteId) {
-      const sitesRes = await fetch(`${GATEWAY}/rest/v1.2/me/sites?fields=ID,URL,name`, {
-        headers: gwHeaders(LOVABLE_API_KEY, WORDPRESS_COM_API_KEY),
-      });
-      const sitesJson = await sitesRes.json();
-      if (!sitesRes.ok) throw new Error(`WP sites ${sitesRes.status}: ${JSON.stringify(sitesJson)}`);
-      const first = sitesJson.sites?.[0];
-      if (!first) throw new Error("No WordPress sites available on this account");
-      siteId = String(first.ID);
-    }
+    // Site is hardcoded (the connection doesn't have the `global` scope to list me/sites).
+    const siteId = ((site_id || "").toString().trim()) || DEFAULT_SITE;
 
     // 2. Upload hero image (optional)
     let featuredImageId: number | undefined;
