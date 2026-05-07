@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Masthead } from "@/components/Masthead";
 import { Search } from "lucide-react";
+import { LegendOfDay } from "@/components/LegendOfDay";
 
 type Article = {
   id: string;
@@ -51,6 +52,7 @@ export default function PublicHome() {
     <div className="min-h-screen bg-background">
       <Masthead variant="public" />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        {!category && <LegendOfDay />}
         {category && (
           <div className="mb-6">
             <div className="label-eyebrow text-primary mb-1">Section</div>

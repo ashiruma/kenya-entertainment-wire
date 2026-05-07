@@ -154,6 +154,89 @@ export type Database = {
           },
         ]
       }
+      legend_features: {
+        Row: {
+          created_at: string
+          draft_id: string | null
+          feature_date: string
+          headline: string
+          hero_image_url: string | null
+          id: string
+          legend_id: string
+          tribute: string
+        }
+        Insert: {
+          created_at?: string
+          draft_id?: string | null
+          feature_date: string
+          headline: string
+          hero_image_url?: string | null
+          id?: string
+          legend_id: string
+          tribute: string
+        }
+        Update: {
+          created_at?: string
+          draft_id?: string | null
+          feature_date?: string
+          headline?: string
+          hero_image_url?: string | null
+          id?: string
+          legend_id?: string
+          tribute?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legend_features_legend_id_fkey"
+            columns: ["legend_id"]
+            isOneToOne: false
+            referencedRelation: "legends"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legends: {
+        Row: {
+          active: boolean
+          country: string | null
+          created_at: string
+          era: string | null
+          field: string | null
+          id: string
+          image_url: string | null
+          impact: string | null
+          name: string
+          short_bio: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          country?: string | null
+          created_at?: string
+          era?: string | null
+          field?: string | null
+          id?: string
+          image_url?: string | null
+          impact?: string | null
+          name: string
+          short_bio?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          country?: string | null
+          created_at?: string
+          era?: string | null
+          field?: string | null
+          id?: string
+          image_url?: string | null
+          impact?: string | null
+          name?: string
+          short_bio?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

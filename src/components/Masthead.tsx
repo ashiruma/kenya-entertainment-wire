@@ -19,6 +19,7 @@ export function Masthead({ variant = "newsroom" }: { variant?: "newsroom" | "pub
               <NavLink to="/newsroom" className={({ isActive }) => isActive ? "text-accent" : "text-primary-foreground/80 hover:text-primary-foreground"}>Discover</NavLink>
               <NavLink to="/newsroom/drafts" className={({ isActive }) => isActive ? "text-accent" : "text-primary-foreground/80 hover:text-primary-foreground"}>Drafts</NavLink>
               <NavLink to="/newsroom/published" className={({ isActive }) => isActive ? "text-accent" : "text-primary-foreground/80 hover:text-primary-foreground"}>Published</NavLink>
+              <NavLink to="/newsroom/legends" className={({ isActive }) => isActive ? "text-accent" : "text-primary-foreground/80 hover:text-primary-foreground"}>Legends</NavLink>
               {isEditor && (
                 <NavLink to="/newsroom/health" className={({ isActive }) => isActive ? "text-accent" : "text-primary-foreground/80 hover:text-primary-foreground"}>Health</NavLink>
               )}
