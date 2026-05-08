@@ -16,6 +16,22 @@ type Feature = {
   } | null;
 };
 
+function ensureParagraphs(html: string): string {
+  if (!html) return "";
+  const trimmed = html.trim();
+  // If it already contains block-level tags, return as-is.
+  if (/<(p|h[1-6]|blockquote|ul|ol|li|div)[\s>]/i.test(trimmed)) return trimmed;
+  // Split on blank lines first, then single newlines as fallback.
+  const blocks = trimmed.split(/\n{2,}/).flatMap((b) =>
+    b.includes("\n") ? b.split(/\n+/) : [b]
+  );
+  return blocks
+    .map((b) => b.trim())
+    .filter(Boolean)
+    .map((b) => `<p>${b}</p>`)
+    .join("\n");
+}
+
 export default function LegendPage() {
   const { id } = useParams<{ id: string }>();
   const [f, setF] = useState<Feature | null>(null);
@@ -59,7 +75,7 @@ export default function LegendPage() {
         )}
         <article
           className="prose max-w-none prose-headings:font-display prose-blockquote:border-accent prose-blockquote:text-primary"
-          dangerouslySetInnerHTML={{ __html: f.tribute }}
+          dangerouslySetInnerHTML={{ __html: ensureParagraphs(f.tribute) }}
         />
         {archive.length > 1 && (
           <section className="mt-12 pt-8 border-t border-border">
