@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Navigate, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Masthead } from "@/components/Masthead";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import { Save, Send, Trash2, Twitter, Instagram, Facebook, Image as ImageIcon, RefreshCw, Globe, ExternalLink } from "lucide-react";
+import { Save, Send, Trash2, Twitter, Instagram, Facebook, Image as ImageIcon, RefreshCw, Globe, ExternalLink, AlertTriangle, CheckCircle2, Link as LinkIcon, Plus, X } from "lucide-react";
+import { validateArticle, canApprove, type SourceRef, type Issue } from "@/lib/articleValidation";
 
 type Draft = {
   id: string;
@@ -26,6 +27,7 @@ type Draft = {
   auto_publish_enabled?: boolean;
   auto_publish_at?: string | null;
   wordpress_last_error?: string | null;
+  sources?: SourceRef[] | null;
 };
 
 export default function DraftEditor() {
@@ -51,7 +53,30 @@ export default function DraftEditor() {
 
   const update = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
 
+  const issues: Issue[] = useMemo(() => validateArticle({
+    headline: draft.headline,
+    lede: draft.lede,
+    body: draft.body,
+    template_type: draft.template_type,
+    sources: (draft.sources as SourceRef[]) || [],
+  }), [draft.headline, draft.lede, draft.body, draft.template_type, draft.sources]);
+  const errors = issues.filter((i) => i.severity === "error");
+  const warnings = issues.filter((i) => i.severity === "warning");
+  const approvable = canApprove(issues);
+
+  const sources: SourceRef[] = (draft.sources as SourceRef[]) || [];
+  const updateSource = (idx: number, patch: Partial<SourceRef>) => {
+    const next = sources.map((s, i) => (i === idx ? { ...s, ...patch } : s));
+    update({ sources: next });
+  };
+  const addSource = () => update({ sources: [...sources, { url: "", title: "", notes: [] }] });
+  const removeSource = (idx: number) => update({ sources: sources.filter((_, i) => i !== idx) });
+
   const save = async (newStatus?: string) => {
+    if (newStatus && (newStatus === "review" || newStatus === "published") && !approvable) {
+      toast.error("Resolve validation errors before sending for review or publishing");
+      return;
+    }
     setBusy(true);
     try {
       const { error } = await supabase.from("drafts").update({
@@ -67,6 +92,7 @@ export default function DraftEditor() {
         facebook_post: draft.facebook_post,
         auto_publish_enabled: draft.auto_publish_enabled ?? false,
         auto_publish_at: draft.auto_publish_at || null,
+        sources: sources,
         ...(newStatus ? { status: newStatus, ...(newStatus === "published" ? { published_at: new Date().toISOString() } : {}) } : {}),
       }).eq("id", draft.id);
       if (error) throw error;
@@ -107,6 +133,10 @@ export default function DraftEditor() {
 
   const publishToWordPress = async () => {
     if (!draft) return;
+    if (!approvable) {
+      toast.error("Resolve validation errors before pushing to WordPress");
+      return;
+    }
     setWpBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke("publish-wordpress", {
