@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Masthead } from "@/components/Masthead";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink, Link as LinkIcon } from "lucide-react";
+
+type SourceRef = { url: string; title?: string; notes?: string[] };
 
 type Article = {
   id: string;
@@ -14,6 +16,7 @@ type Article = {
   hero_image_url: string | null;
   published_at: string | null;
   byline: string | null;
+  sources: SourceRef[] | null;
 };
 
 export default function PublicArticle() {
@@ -23,9 +26,9 @@ export default function PublicArticle() {
 
   useEffect(() => {
     if (!id) return;
-    supabase.from("drafts").select("id, headline, lede, body, category, region, hero_image_url, published_at, byline")
+    supabase.from("drafts").select("id, headline, lede, body, category, region, hero_image_url, published_at, byline, sources")
       .eq("id", id).eq("status", "published").maybeSingle()
-      .then(({ data }) => { if (data) setArticle(data as Article); else setNotFound(true); });
+      .then(({ data }) => { if (data) setArticle(data as unknown as Article); else setNotFound(true); });
   }, [id]);
 
   if (notFound) return (
@@ -55,10 +58,42 @@ export default function PublicArticle() {
         </div>
         {article.hero_image_url && <img src={article.hero_image_url} alt={article.headline} className="w-full aspect-[16/9] object-cover rounded mb-8" />}
         <article className="max-w-none text-ink-mid">
-          {(article.body || "").split(/\n\n+/).map((p, i) => (
-            <p key={i} className="mb-5 leading-relaxed text-[17px]">{p.replace(/^#+\s*/, "")}</p>
-          ))}
+          {(article.body || "").split(/\n\n+/).map((p, i) => {
+            const trimmed = p.trim();
+            const h = trimmed.match(/^(#{2,3})\s+(.+)$/);
+            if (h) {
+              return <h2 key={i} className="font-display text-2xl mt-8 mb-3 text-foreground">{h[2]}</h2>;
+            }
+            return <p key={i} className="mb-5 leading-relaxed text-[17px]">{trimmed}</p>;
+          })}
         </article>
+
+        {article.sources && article.sources.length > 0 && (
+          <section className="mt-10 pt-6 border-t border-border">
+            <div className="label-eyebrow text-primary flex items-center gap-1.5 mb-3">
+              <LinkIcon size={11} /> Sources & verification notes
+            </div>
+            <ul className="space-y-4">
+              {article.sources.map((s, i) => (
+                <li key={i} className="text-sm">
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline inline-flex items-center gap-1 font-medium"
+                  >
+                    {s.title || s.url} <ExternalLink size={11} />
+                  </a>
+                  {s.notes && s.notes.length > 0 && (
+                    <ul className="mt-1.5 pl-4 list-disc text-xs text-ink-light space-y-0.5">
+                      {s.notes.map((n, j) => <li key={j}>{n}</li>)}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
     </div>
   );

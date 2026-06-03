@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import PublicHome from "./pages/public/Home";
 import PublicArticle from "./pages/public/Article";
 import LegendPage from "./pages/public/Legend";
+import StyleGuide from "./pages/public/StyleGuide";
 import AuthPage from "./pages/Auth";
 import Discover from "./pages/newsroom/Discover";
 import DraftsList from "./pages/newsroom/DraftsList";
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/category/:category" element={<PublicHome />} />
           <Route path="/article/:id" element={<PublicArticle />} />
           <Route path="/legends/:id" element={<LegendPage />} />
+          <Route path="/style-guide" element={<StyleGuide />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/newsroom" element={<Discover />} />
           <Route path="/newsroom/drafts" element={<DraftsList />} />
