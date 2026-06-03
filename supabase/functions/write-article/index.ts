@@ -36,10 +36,19 @@ ABSOLUTE BANS:
 - NO unattributed quotes.
 
 TEMPLATES (pick the most appropriate):
-- breaking (150–300 words): [Artist/group] has [released/been announced/signed/performed] [what], [organization] confirmed [day]. Then context, quote, background, close.
-- event_preview (200–350 words): [Event] returns to [location] on [date], featuring [headline]. Then what to expect, organizer quote, history/local context, CTA close.
-- profile (400–700 words): Scene-setting lede, the angle (why now), background, current work, bigger picture for Western Kenya/Kenya.
-- review (250–500 words): Verdict-first lede, standout tracks/scenes, where it struggles, context, recommendation close.
+- breaking (450–650 words): [Artist/group] has [released/been announced/signed/performed] [what], [organization] confirmed [day]. Then context, quote, background, reaction, what-it-means, close.
+- event_preview (500–750 words): [Event] returns to [location] on [date], featuring [headline]. Then what to expect, lineup detail, organizer quote, ticket/venue logistics, history/local context, CTA close.
+- profile (800–1200 words): Scene-setting lede, the angle (why now), background, current work, quotes from subject and one other voice, bigger picture for Western Kenya/Kenya, what's next.
+- review (550–800 words): Verdict-first lede, standout tracks/scenes, where it struggles, comparison/context, recommendation close.
+
+DEPTH REQUIREMENTS (apply to every article):
+- Minimum 6 body paragraphs. Aim for 8–12 on profiles and previews.
+- Include at least TWO direct quotes (attributed) where the source supports them; otherwise paraphrase with attribution.
+- Include a "background" paragraph that situates the story in recent history (last 12–24 months).
+- Include a "what it means" or "why it matters" paragraph for the Western Kenya / Kenyan audience.
+- Name specific places, venues, dates, prices (KSh), and people wherever the source provides them.
+- Close with a forward-looking line: what's next, when, where.
+- Never pad with filler. If a fact isn't in the source, do not invent it — expand instead on context the audience needs.
 
 COVERAGE PRIORITY: Western Kenya (Kakamega, Kisumu, Bungoma, Vihiga, Busia, Siaya, Homa Bay, Migori, Kisii) first, then national Kenyan, then Pan-African.`;
 
@@ -67,7 +76,7 @@ ORIGINAL EXCERPT: ${source_excerpt || "(none)"}
 FULL ARTICLE CONTENT:
 ${(source_content || source_excerpt || "").slice(0, 6000)}
 
-Write a fresh, original Amaica Media article. Do NOT copy phrases from the source. Use only the FACTS to write a new piece following the Amaica style rules and inverted pyramid.
+Write a fresh, original Amaica Media article. Do NOT copy phrases from the source. Use only the FACTS to write a new piece following the Amaica style rules and inverted pyramid. Go DEEP: hit the depth requirements in the style guide — minimum 6 body paragraphs, two attributed quotes where supported, a background paragraph, a "why it matters" paragraph, and a forward-looking close. Aim for the upper end of the word range for the chosen template.
 
 Also produce social posts:
 - Twitter/X: max 270 chars, punchy, 1-2 hashtags max
@@ -98,7 +107,7 @@ Return STRICT JSON only via the provided tool.`;
               properties: {
                 headline: { type: "string", description: "Sharp headline, max 80 chars, no clickbait" },
                 lede: { type: "string", description: "First sentence answering 'what happened?'" },
-                body: { type: "string", description: "Full article body in markdown, includes the lede as first paragraph. Inverted pyramid." },
+                body: { type: "string", description: "Full article body in markdown, includes the lede as first paragraph. Inverted pyramid. Minimum 6 paragraphs; hit the depth requirements (two quotes where supported, background paragraph, why-it-matters paragraph, forward-looking close). Target the upper end of the template's word range." },
                 category: { type: "string", enum: ["music", "film", "tv", "events", "celebrity", "culture"] },
                 template_used: { type: "string", enum: ["breaking", "event_preview", "profile", "review"] },
                 twitter_post: { type: "string" },
