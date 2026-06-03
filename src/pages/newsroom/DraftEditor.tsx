@@ -43,7 +43,7 @@ export default function DraftEditor() {
     if (!id || !user) return;
     supabase.from("drafts").select("*").eq("id", id).single().then(({ data, error }) => {
       if (error) toast.error(error.message);
-      else setDraft(data as Draft);
+      else setDraft(data as unknown as Draft);
     });
   }, [id, user]);
 
