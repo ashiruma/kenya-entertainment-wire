@@ -204,7 +204,77 @@ export default function DraftEditor() {
 
           <div>
             <label className="label-eyebrow block mb-1">Body (markdown)</label>
+            <p className="text-[11px] text-ink-light mb-1">
+              Required sections (in order): <code>## Background</code>, <code>## Key Details</code>, <code>## Quotes</code>, <code>## Why it matters</code>, <code>## Outlook</code>.
+            </p>
             <textarea value={draft.body || ""} onChange={(e) => update({ body: e.target.value })} rows={20} className="w-full text-sm font-mono bg-card border border-border rounded px-3 py-2 resize-y leading-relaxed" />
+          </div>
+
+          {/* Validation panel */}
+          <div className={`border rounded p-4 shadow-card ${approvable ? "bg-card border-border" : "bg-red-light/30 border-destructive/40"}`}>
+            <div className="flex items-center gap-2 mb-2">
+              {approvable ? <CheckCircle2 size={14} className="text-primary" /> : <AlertTriangle size={14} className="text-destructive" />}
+              <div className="label-eyebrow">Editor checks</div>
+              <span className="text-[11px] text-ink-light ml-auto">{errors.length} error{errors.length === 1 ? "" : "s"} · {warnings.length} warning{warnings.length === 1 ? "" : "s"}</span>
+            </div>
+            {issues.length === 0 ? (
+              <p className="text-xs text-ink-mid">All checks pass. Ready for review.</p>
+            ) : (
+              <ul className="space-y-2">
+                {issues.map((i) => (
+                  <li key={i.id} className="text-xs">
+                    <div className={`font-medium ${i.severity === "error" ? "text-destructive" : "text-accent-foreground"}`}>
+                      {i.severity === "error" ? "✗" : "!"} {i.message}
+                    </div>
+                    <div className="text-ink-light pl-3">→ {i.suggestion}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!approvable && (
+              <p className="text-[11px] text-destructive mt-2">Resolve the errors above before sending for review or publishing.</p>
+            )}
+          </div>
+
+          {/* Sources panel */}
+          <div className="bg-card border border-border rounded p-4 shadow-card space-y-3">
+            <div className="flex items-center gap-2">
+              <LinkIcon size={12} className="text-primary" />
+              <div className="label-eyebrow">Sources & notes</div>
+              <button onClick={addSource} className="ml-auto text-[11px] text-primary hover:underline inline-flex items-center gap-1">
+                <Plus size={11} /> Add source
+              </button>
+            </div>
+            <p className="text-[11px] text-ink-light">Editors use these links and notes to verify every fact in the story.</p>
+            {sources.length === 0 && <p className="text-xs text-ink-light italic">No sources attached yet.</p>}
+            {sources.map((s, idx) => (
+              <div key={idx} className="border border-border rounded p-2.5 space-y-1.5 bg-muted/40">
+                <div className="flex gap-1.5">
+                  <input
+                    value={s.title || ""}
+                    onChange={(e) => updateSource(idx, { title: e.target.value })}
+                    placeholder="Source name (e.g. Nation, official statement)"
+                    className="flex-1 text-xs bg-card border border-border rounded px-2 py-1"
+                  />
+                  <button onClick={() => removeSource(idx)} className="text-ink-light hover:text-destructive p-1" aria-label="Remove source">
+                    <X size={12} />
+                  </button>
+                </div>
+                <input
+                  value={s.url || ""}
+                  onChange={(e) => updateSource(idx, { url: e.target.value })}
+                  placeholder="https://…"
+                  className="w-full text-xs bg-card border border-border rounded px-2 py-1"
+                />
+                <textarea
+                  value={(s.notes || []).join("\n")}
+                  onChange={(e) => updateSource(idx, { notes: e.target.value.split("\n").map((n) => n.trim()).filter(Boolean) })}
+                  rows={3}
+                  placeholder={"Extracted notes (one per line)\ne.g. Concert KSh 1,500, Oct 12 at Bukhungu Stadium"}
+                  className="w-full text-xs bg-card border border-border rounded px-2 py-1 resize-y font-mono"
+                />
+              </div>
+            ))}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
