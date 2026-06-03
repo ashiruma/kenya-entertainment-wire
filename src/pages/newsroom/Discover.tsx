@@ -125,6 +125,9 @@ export default function Discover() {
         instagram_post: a.instagram_post,
         facebook_post: a.facebook_post,
         status: "draft",
+        sources: (a.sources && a.sources.length > 0)
+          ? a.sources
+          : [{ url: story.source_url, title: story.source, notes: story.excerpt ? [story.excerpt.slice(0, 300)] : [] }],
       }).select().single();
       if (dErr) throw dErr;
       await supabase.from("discovered_stories").update({ status: "used" }).eq("id", story.id);
