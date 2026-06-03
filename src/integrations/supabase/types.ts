@@ -81,6 +81,7 @@ export type Database = {
           region: string | null
           social_image_url: string | null
           source_story_id: string | null
+          sources: Json
           status: string
           template_type: string
           twitter_post: string | null
@@ -108,6 +109,7 @@ export type Database = {
           region?: string | null
           social_image_url?: string | null
           source_story_id?: string | null
+          sources?: Json
           status?: string
           template_type?: string
           twitter_post?: string | null
@@ -135,6 +137,7 @@ export type Database = {
           region?: string | null
           social_image_url?: string | null
           source_story_id?: string | null
+          sources?: Json
           status?: string
           template_type?: string
           twitter_post?: string | null

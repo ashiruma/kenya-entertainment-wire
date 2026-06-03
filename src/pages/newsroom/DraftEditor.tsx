@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Navigate, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Masthead } from "@/components/Masthead";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import { Save, Send, Trash2, Twitter, Instagram, Facebook, Image as ImageIcon, RefreshCw, Globe, ExternalLink } from "lucide-react";
+import { Save, Send, Trash2, Twitter, Instagram, Facebook, Image as ImageIcon, RefreshCw, Globe, ExternalLink, AlertTriangle, CheckCircle2, Link as LinkIcon, Plus, X } from "lucide-react";
+import { validateArticle, canApprove, type SourceRef, type Issue } from "@/lib/articleValidation";
 
 type Draft = {
   id: string;
@@ -26,6 +27,7 @@ type Draft = {
   auto_publish_enabled?: boolean;
   auto_publish_at?: string | null;
   wordpress_last_error?: string | null;
+  sources?: SourceRef[] | null;
 };
 
 export default function DraftEditor() {
@@ -41,7 +43,7 @@ export default function DraftEditor() {
     if (!id || !user) return;
     supabase.from("drafts").select("*").eq("id", id).single().then(({ data, error }) => {
       if (error) toast.error(error.message);
-      else setDraft(data as Draft);
+      else setDraft(data as unknown as Draft);
     });
   }, [id, user]);
 
@@ -51,7 +53,30 @@ export default function DraftEditor() {
 
   const update = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
 
+  const issues: Issue[] = useMemo(() => validateArticle({
+    headline: draft.headline,
+    lede: draft.lede,
+    body: draft.body,
+    template_type: draft.template_type,
+    sources: (draft.sources as SourceRef[]) || [],
+  }), [draft.headline, draft.lede, draft.body, draft.template_type, draft.sources]);
+  const errors = issues.filter((i) => i.severity === "error");
+  const warnings = issues.filter((i) => i.severity === "warning");
+  const approvable = canApprove(issues);
+
+  const sources: SourceRef[] = (draft.sources as SourceRef[]) || [];
+  const updateSource = (idx: number, patch: Partial<SourceRef>) => {
+    const next = sources.map((s, i) => (i === idx ? { ...s, ...patch } : s));
+    update({ sources: next });
+  };
+  const addSource = () => update({ sources: [...sources, { url: "", title: "", notes: [] }] });
+  const removeSource = (idx: number) => update({ sources: sources.filter((_, i) => i !== idx) });
+
   const save = async (newStatus?: string) => {
+    if (newStatus && (newStatus === "review" || newStatus === "published") && !approvable) {
+      toast.error("Resolve validation errors before sending for review or publishing");
+      return;
+    }
     setBusy(true);
     try {
       const { error } = await supabase.from("drafts").update({
@@ -67,6 +92,7 @@ export default function DraftEditor() {
         facebook_post: draft.facebook_post,
         auto_publish_enabled: draft.auto_publish_enabled ?? false,
         auto_publish_at: draft.auto_publish_at || null,
+        sources: sources,
         ...(newStatus ? { status: newStatus, ...(newStatus === "published" ? { published_at: new Date().toISOString() } : {}) } : {}),
       }).eq("id", draft.id);
       if (error) throw error;
@@ -107,6 +133,10 @@ export default function DraftEditor() {
 
   const publishToWordPress = async () => {
     if (!draft) return;
+    if (!approvable) {
+      toast.error("Resolve validation errors before pushing to WordPress");
+      return;
+    }
     setWpBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke("publish-wordpress", {
@@ -174,7 +204,77 @@ export default function DraftEditor() {
 
           <div>
             <label className="label-eyebrow block mb-1">Body (markdown)</label>
+            <p className="text-[11px] text-ink-light mb-1">
+              Required sections (in order): <code>## Background</code>, <code>## Key Details</code>, <code>## Quotes</code>, <code>## Why it matters</code>, <code>## Outlook</code>.
+            </p>
             <textarea value={draft.body || ""} onChange={(e) => update({ body: e.target.value })} rows={20} className="w-full text-sm font-mono bg-card border border-border rounded px-3 py-2 resize-y leading-relaxed" />
+          </div>
+
+          {/* Validation panel */}
+          <div className={`border rounded p-4 shadow-card ${approvable ? "bg-card border-border" : "bg-red-light/30 border-destructive/40"}`}>
+            <div className="flex items-center gap-2 mb-2">
+              {approvable ? <CheckCircle2 size={14} className="text-primary" /> : <AlertTriangle size={14} className="text-destructive" />}
+              <div className="label-eyebrow">Editor checks</div>
+              <span className="text-[11px] text-ink-light ml-auto">{errors.length} error{errors.length === 1 ? "" : "s"} · {warnings.length} warning{warnings.length === 1 ? "" : "s"}</span>
+            </div>
+            {issues.length === 0 ? (
+              <p className="text-xs text-ink-mid">All checks pass. Ready for review.</p>
+            ) : (
+              <ul className="space-y-2">
+                {issues.map((i) => (
+                  <li key={i.id} className="text-xs">
+                    <div className={`font-medium ${i.severity === "error" ? "text-destructive" : "text-accent-foreground"}`}>
+                      {i.severity === "error" ? "✗" : "!"} {i.message}
+                    </div>
+                    <div className="text-ink-light pl-3">→ {i.suggestion}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!approvable && (
+              <p className="text-[11px] text-destructive mt-2">Resolve the errors above before sending for review or publishing.</p>
+            )}
+          </div>
+
+          {/* Sources panel */}
+          <div className="bg-card border border-border rounded p-4 shadow-card space-y-3">
+            <div className="flex items-center gap-2">
+              <LinkIcon size={12} className="text-primary" />
+              <div className="label-eyebrow">Sources & notes</div>
+              <button onClick={addSource} className="ml-auto text-[11px] text-primary hover:underline inline-flex items-center gap-1">
+                <Plus size={11} /> Add source
+              </button>
+            </div>
+            <p className="text-[11px] text-ink-light">Editors use these links and notes to verify every fact in the story.</p>
+            {sources.length === 0 && <p className="text-xs text-ink-light italic">No sources attached yet.</p>}
+            {sources.map((s, idx) => (
+              <div key={idx} className="border border-border rounded p-2.5 space-y-1.5 bg-muted/40">
+                <div className="flex gap-1.5">
+                  <input
+                    value={s.title || ""}
+                    onChange={(e) => updateSource(idx, { title: e.target.value })}
+                    placeholder="Source name (e.g. Nation, official statement)"
+                    className="flex-1 text-xs bg-card border border-border rounded px-2 py-1"
+                  />
+                  <button onClick={() => removeSource(idx)} className="text-ink-light hover:text-destructive p-1" aria-label="Remove source">
+                    <X size={12} />
+                  </button>
+                </div>
+                <input
+                  value={s.url || ""}
+                  onChange={(e) => updateSource(idx, { url: e.target.value })}
+                  placeholder="https://…"
+                  className="w-full text-xs bg-card border border-border rounded px-2 py-1"
+                />
+                <textarea
+                  value={(s.notes || []).join("\n")}
+                  onChange={(e) => updateSource(idx, { notes: e.target.value.split("\n").map((n) => n.trim()).filter(Boolean) })}
+                  rows={3}
+                  placeholder={"Extracted notes (one per line)\ne.g. Concert KSh 1,500, Oct 12 at Bukhungu Stadium"}
+                  className="w-full text-xs bg-card border border-border rounded px-2 py-1 resize-y font-mono"
+                />
+              </div>
+            ))}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
