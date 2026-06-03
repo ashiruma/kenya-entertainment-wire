@@ -42,15 +42,23 @@ TEMPLATES (pick the most appropriate):
 - review (550–800 words): Verdict-first lede, standout tracks/scenes, where it struggles, comparison/context, recommendation close.
 
 DEPTH REQUIREMENTS (apply to every article):
-- Minimum 6 body paragraphs. Aim for 8–12 on profiles and previews.
-- Include at least TWO direct quotes (attributed) where the source supports them; otherwise paraphrase with attribution.
-- Include a "background" paragraph that situates the story in recent history (last 12–24 months).
-- Include a "what it means" or "why it matters" paragraph for the Western Kenya / Kenyan audience.
+- Minimum 6 body paragraphs across the structured sections. Aim for 8–12 on profiles and previews.
+- Include at least TWO direct quotes (in straight double quotes ") with attribution ("…," said Jane Mwangi.) where the source supports them; otherwise paraphrase with attribution.
 - Name specific places, venues, dates, prices (KSh), and people wherever the source provides them.
-- Close with a forward-looking line: what's next, when, where.
 - Never pad with filler. If a fact isn't in the source, do not invent it — expand instead on context the audience needs.
 
-COVERAGE PRIORITY: Western Kenya (Kakamega, Kisumu, Bungoma, Vihiga, Busia, Siaya, Homa Bay, Migori, Kisii) first, then national Kenyan, then Pan-African.`;
+STRUCTURED TEMPLATE — MANDATORY HEADINGS (in this exact order, using H2 markdown "## "):
+1. ## Background — last 12–24 months of context that situates the story.
+2. ## Key Details — the core facts: who, what, when, where, how much, how many.
+3. ## Quotes — at least two attributed direct quotes (or paraphrased with attribution if no source quote exists).
+4. ## Why it matters — what this means for the Western Kenya / Kenyan audience.
+5. ## Outlook — forward-looking close: what's next, when, where.
+
+The body field MUST contain the lede as a leading paragraph, then ALL FIVE headings above, each followed by 1–3 paragraphs. Do not rename, omit, reorder, or merge the headings.
+
+COVERAGE PRIORITY: Western Kenya (Kakamega, Kisumu, Bungoma, Vihiga, Busia, Siaya, Homa Bay, Migori, Kisii) first, then national Kenyan, then Pan-African.
+
+SOURCES: Always return a sources[] array with the original wire URL (if provided) and any other URLs explicitly named in the source content. For each source, extract 2–4 short bullet notes (the specific facts you used: names, dates, prices, quotes, venues). Editors use these to verify the story.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -83,7 +91,7 @@ Also produce social posts:
 - Instagram: 3-4 short lines + 5 hashtags
 - Facebook: 2-3 sentences, conversational, no hashtags
 
-Return STRICT JSON only via the provided tool.`;
+Return STRICT JSON only via the provided tool. The body MUST include the five mandatory headings (## Background, ## Key Details, ## Quotes, ## Why it matters, ## Outlook) in that exact order. Include sources[] with the wire URL and extracted notes used.`;
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -107,14 +115,28 @@ Return STRICT JSON only via the provided tool.`;
               properties: {
                 headline: { type: "string", description: "Sharp headline, max 80 chars, no clickbait" },
                 lede: { type: "string", description: "First sentence answering 'what happened?'" },
-                body: { type: "string", description: "Full article body in markdown, includes the lede as first paragraph. Inverted pyramid. Minimum 6 paragraphs; hit the depth requirements (two quotes where supported, background paragraph, why-it-matters paragraph, forward-looking close). Target the upper end of the template's word range." },
+                body: { type: "string", description: "Full article body in markdown. Starts with the lede as the opening paragraph, then MUST contain these five H2 headings in this exact order: '## Background', '## Key Details', '## Quotes', '## Why it matters', '## Outlook'. Each section has 1–3 paragraphs. Minimum 6 paragraphs total. Two attributed direct quotes (straight quotes \") in the Quotes section where the source supports them. Target the upper end of the template's word range." },
                 category: { type: "string", enum: ["music", "film", "tv", "events", "celebrity", "culture"] },
                 template_used: { type: "string", enum: ["breaking", "event_preview", "profile", "review"] },
                 twitter_post: { type: "string" },
                 instagram_post: { type: "string" },
                 facebook_post: { type: "string" },
+                sources: {
+                  type: "array",
+                  description: "Sources used. Include the original wire URL plus any URLs explicitly named in the content. For each, 2–4 short factual notes extracted from the source.",
+                  items: {
+                    type: "object",
+                    properties: {
+                      url: { type: "string" },
+                      title: { type: "string" },
+                      notes: { type: "array", items: { type: "string" } },
+                    },
+                    required: ["url", "title", "notes"],
+                    additionalProperties: false,
+                  },
+                },
               },
-              required: ["headline", "lede", "body", "category", "template_used", "twitter_post", "instagram_post", "facebook_post"],
+              required: ["headline", "lede", "body", "category", "template_used", "twitter_post", "instagram_post", "facebook_post", "sources"],
               additionalProperties: false,
             },
           },
