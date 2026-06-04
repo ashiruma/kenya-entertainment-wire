@@ -1,4 +1,12 @@
-export type SourceRef = { url: string; title?: string; notes?: string[] };
+export type SourceNote = string | { text: string; section?: string };
+export type SourceRef = { url: string; title?: string; notes?: SourceNote[] };
+
+export function noteText(n: SourceNote): string {
+  return typeof n === "string" ? n : (n?.text || "");
+}
+export function noteSection(n: SourceNote): string {
+  return typeof n === "string" ? "" : (n?.section || "");
+}
 
 export type ArticleCheckInput = {
   headline?: string | null;
@@ -199,7 +207,7 @@ export function validateArticle(input: ArticleCheckInput): Issue[] {
       suggestion: "Add at least one source link with 2–4 extracted notes so editors can verify the story.",
     });
   } else {
-    const noNotes = sources.filter((s) => !s.notes || s.notes.length === 0).length;
+    const noNotes = sources.filter((s) => !s.notes || s.notes.filter((n) => noteText(n).trim().length > 0).length === 0).length;
     if (noNotes > 0) {
       issues.push({
         id: "sources-notes",
