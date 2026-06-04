@@ -4,8 +4,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { Masthead } from "@/components/Masthead";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import { Save, Send, Trash2, Twitter, Instagram, Facebook, Image as ImageIcon, RefreshCw, Globe, ExternalLink, AlertTriangle, CheckCircle2, Link as LinkIcon, Plus, X } from "lucide-react";
-import { validateArticle, canApprove, type SourceRef, type Issue } from "@/lib/articleValidation";
+import { Save, Send, Trash2, Twitter, Instagram, Facebook, Image as ImageIcon, RefreshCw, Globe, ExternalLink, AlertTriangle, CheckCircle2, Link as LinkIcon, Plus, X, Wand2, History } from "lucide-react";
+import { validateArticle, canApprove, noteText, noteSection, REQUIRED_HEADINGS, type SourceRef, type SourceNote, type Issue } from "@/lib/articleValidation";
+
+type AuditEntry = {
+  id: string;
+  action: string;
+  actor_display_name: string | null;
+  from_status: string | null;
+  to_status: string | null;
+  error_count: number;
+  warning_count: number;
+  notes: string | null;
+  created_at: string;
+};
 
 type Draft = {
   id: string;
@@ -38,6 +50,8 @@ export default function DraftEditor() {
   const [busy, setBusy] = useState(false);
   const [imgBusy, setImgBusy] = useState(false);
   const [wpBusy, setWpBusy] = useState(false);
+  const [fixBusy, setFixBusy] = useState(false);
+  const [audit, setAudit] = useState<AuditEntry[]>([]);
 
   useEffect(() => {
     if (!id || !user) return;
@@ -46,6 +60,17 @@ export default function DraftEditor() {
       else setDraft(data as unknown as Draft);
     });
   }, [id, user]);
+
+  const loadAudit = async (draftId: string) => {
+    const { data } = await supabase
+      .from("approval_audit_log")
+      .select("id, action, actor_display_name, from_status, to_status, error_count, warning_count, notes, created_at")
+      .eq("draft_id", draftId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (data) setAudit(data as unknown as AuditEntry[]);
+  };
+  useEffect(() => { if (id && user) loadAudit(id); }, [id, user]);
 
   if (loading) return <div className="min-h-screen bg-background" />;
   if (!user) return <Navigate to="/auth" replace />;
@@ -72,6 +97,43 @@ export default function DraftEditor() {
   const addSource = () => update({ sources: [...sources, { url: "", title: "", notes: [] }] });
   const removeSource = (idx: number) => update({ sources: sources.filter((_, i) => i !== idx) });
 
+  const updateNote = (sIdx: number, nIdx: number, patch: Partial<{ text: string; section: string }>) => {
+    const s = sources[sIdx];
+    const notes = (s.notes || []).map((n, i) => {
+      if (i !== nIdx) return n;
+      const current = typeof n === "string" ? { text: n, section: "" } : { text: n.text || "", section: n.section || "" };
+      return { ...current, ...patch };
+    });
+    updateSource(sIdx, { notes });
+  };
+  const addNote = (sIdx: number) => {
+    const s = sources[sIdx];
+    updateSource(sIdx, { notes: [...(s.notes || []), { text: "", section: "" }] });
+  };
+  const removeNote = (sIdx: number, nIdx: number) => {
+    const s = sources[sIdx];
+    updateSource(sIdx, { notes: (s.notes || []).filter((_, i) => i !== nIdx) });
+  };
+
+  const recordAudit = async (action: string, fromStatus: string | null, toStatus: string | null, notes?: string) => {
+    if (!user || !draft) return;
+    const display = user.user_metadata?.display_name || user.email || null;
+    await supabase.from("approval_audit_log").insert({
+      draft_id: draft.id,
+      actor_user_id: user.id,
+      actor_display_name: display,
+      action,
+      from_status: fromStatus,
+      to_status: toStatus,
+      validation_errors: errors as unknown as never,
+      validation_warnings: warnings as unknown as never,
+      error_count: errors.length,
+      warning_count: warnings.length,
+      notes: notes || null,
+    });
+    loadAudit(draft.id);
+  };
+
   const save = async (newStatus?: string) => {
     if (newStatus && (newStatus === "review" || newStatus === "published") && !approvable) {
       toast.error("Resolve validation errors before sending for review or publishing");
@@ -97,7 +159,12 @@ export default function DraftEditor() {
       }).eq("id", draft.id);
       if (error) throw error;
       toast.success(newStatus === "published" ? "Published live" : newStatus === "review" ? "Sent for review" : "Saved");
-      if (newStatus) setDraft({ ...draft, status: newStatus });
+      if (newStatus) {
+        await recordAudit(newStatus === "published" ? "publish" : "send_for_review", draft.status, newStatus);
+        setDraft({ ...draft, status: newStatus });
+      } else {
+        await recordAudit("save", draft.status, draft.status);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -158,10 +225,41 @@ export default function DraftEditor() {
       }).eq("id", draft.id);
       setDraft({ ...draft, wordpress_post_url: data.post_url });
       toast.success("Published to WordPress");
+      await recordAudit("wordpress_push", draft.status, draft.status, `Pushed to WordPress (pending review): ${data.post_url}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "WordPress publish failed");
     } finally {
       setWpBusy(false);
+    }
+  };
+
+  const autoFix = async () => {
+    if (!draft) return;
+    if (issues.length === 0) { toast.info("Nothing to fix — all checks pass."); return; }
+    setFixBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("auto-fix-article", {
+        body: {
+          headline: draft.headline,
+          lede: draft.lede,
+          body: draft.body,
+          template_type: draft.template_type,
+          sources,
+          issues: issues.map((i) => ({ id: i.id, message: i.message })),
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Auto-fix failed");
+      update({
+        body: data.body || draft.body,
+        sources: data.sources || sources,
+      });
+      await recordAudit("auto_fix", draft.status, draft.status, `Regenerated: ${(data.sections_updated || []).join(", ") || "sources only"}`);
+      toast.success(`Auto-fix applied${data.sections_updated?.length ? ` (${data.sections_updated.join(", ")})` : ""}. Review and save.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Auto-fix failed");
+    } finally {
+      setFixBusy(false);
     }
   };
 
@@ -234,6 +332,16 @@ export default function DraftEditor() {
             {!approvable && (
               <p className="text-[11px] text-destructive mt-2">Resolve the errors above before sending for review or publishing.</p>
             )}
+            {issues.length > 0 && (
+              <button
+                onClick={autoFix}
+                disabled={fixBusy}
+                className="mt-3 inline-flex items-center gap-1.5 bg-primary text-primary-foreground text-xs px-3 py-1.5 rounded font-medium hover:bg-primary-mid disabled:opacity-50"
+              >
+                <Wand2 size={12} className={fixBusy ? "animate-pulse" : ""} />
+                {fixBusy ? "Regenerating…" : "Auto-fix weak sections & refresh sources"}
+              </button>
+            )}
           </div>
 
           {/* Sources panel */}
@@ -266,15 +374,71 @@ export default function DraftEditor() {
                   placeholder="https://…"
                   className="w-full text-xs bg-card border border-border rounded px-2 py-1"
                 />
-                <textarea
-                  value={(s.notes || []).join("\n")}
-                  onChange={(e) => updateSource(idx, { notes: e.target.value.split("\n").map((n) => n.trim()).filter(Boolean) })}
-                  rows={3}
-                  placeholder={"Extracted notes (one per line)\ne.g. Concert KSh 1,500, Oct 12 at Bukhungu Stadium"}
-                  className="w-full text-xs bg-card border border-border rounded px-2 py-1 resize-y font-mono"
-                />
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-wider text-ink-light">Extracted notes · tag the section each supports</span>
+                    <button onClick={() => addNote(idx)} className="text-[11px] text-primary hover:underline inline-flex items-center gap-0.5">
+                      <Plus size={10} /> Note
+                    </button>
+                  </div>
+                  {(s.notes || []).length === 0 && (
+                    <p className="text-[11px] text-ink-light italic">No notes yet — add the specific facts this link supports.</p>
+                  )}
+                  {(s.notes || []).map((n, nIdx) => (
+                    <div key={nIdx} className="flex gap-1 items-start">
+                      <input
+                        value={noteText(n)}
+                        onChange={(e) => updateNote(idx, nIdx, { text: e.target.value })}
+                        placeholder="e.g. Concert KSh 1,500, Oct 12 at Bukhungu Stadium"
+                        className="flex-1 text-xs bg-card border border-border rounded px-2 py-1"
+                      />
+                      <select
+                        value={noteSection(n)}
+                        onChange={(e) => updateNote(idx, nIdx, { section: e.target.value })}
+                        className="text-[11px] bg-card border border-border rounded px-1 py-1 w-[110px]"
+                        title="Which section this note supports"
+                      >
+                        <option value="">— section —</option>
+                        {REQUIRED_HEADINGS.map((h) => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                      <button onClick={() => removeNote(idx, nIdx)} className="text-ink-light hover:text-destructive p-1" aria-label="Remove note">
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
+          </div>
+
+          {/* Approval audit log */}
+          <div className="bg-card border border-border rounded p-4 shadow-card">
+            <div className="flex items-center gap-2 mb-2">
+              <History size={12} className="text-primary" />
+              <div className="label-eyebrow">Approval audit log</div>
+              <span className="text-[11px] text-ink-light ml-auto">{audit.length} entr{audit.length === 1 ? "y" : "ies"}</span>
+            </div>
+            {audit.length === 0 ? (
+              <p className="text-xs text-ink-light italic">No actions recorded yet.</p>
+            ) : (
+              <ul className="space-y-2 max-h-64 overflow-y-auto">
+                {audit.map((a) => (
+                  <li key={a.id} className="text-xs border-l-2 border-border pl-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono uppercase tracking-wider text-[10px] text-primary">{a.action.replace(/_/g, " ")}</span>
+                      {a.from_status && a.to_status && a.from_status !== a.to_status && (
+                        <span className="text-[10px] text-ink-light">{a.from_status} → {a.to_status}</span>
+                      )}
+                      <span className="ml-auto text-[10px] text-ink-light">{new Date(a.created_at).toLocaleString("en-KE")}</span>
+                    </div>
+                    <div className="text-ink-mid">
+                      {a.actor_display_name || "Unknown"} · <span className={a.error_count > 0 ? "text-destructive" : "text-primary"}>{a.error_count} error{a.error_count === 1 ? "" : "s"}</span>, {a.warning_count} warning{a.warning_count === 1 ? "" : "s"}
+                    </div>
+                    {a.notes && <div className="text-ink-light text-[11px] mt-0.5">{a.notes}</div>}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
