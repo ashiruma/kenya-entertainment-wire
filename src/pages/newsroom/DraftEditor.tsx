@@ -72,19 +72,20 @@ export default function DraftEditor() {
   };
   useEffect(() => { if (id && user) loadAudit(id); }, [id, user]);
 
+  const issues: Issue[] = useMemo(() => draft ? validateArticle({
+    headline: draft.headline,
+    lede: draft.lede,
+    body: draft.body,
+    template_type: draft.template_type,
+    sources: (draft.sources as SourceRef[]) || [],
+  }) : [], [draft?.headline, draft?.lede, draft?.body, draft?.template_type, draft?.sources]);
+
   if (loading) return <div className="min-h-screen bg-background" />;
   if (!user) return <Navigate to="/auth" replace />;
   if (!draft) return <div className="min-h-screen bg-background"><Masthead variant="newsroom" /><div className="p-8 text-ink-light">Loading…</div></div>;
 
   const update = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
 
-  const issues: Issue[] = useMemo(() => validateArticle({
-    headline: draft.headline,
-    lede: draft.lede,
-    body: draft.body,
-    template_type: draft.template_type,
-    sources: (draft.sources as SourceRef[]) || [],
-  }), [draft.headline, draft.lede, draft.body, draft.template_type, draft.sources]);
   const errors = issues.filter((i) => i.severity === "error");
   const warnings = issues.filter((i) => i.severity === "warning");
   const approvable = canApprove(issues);
