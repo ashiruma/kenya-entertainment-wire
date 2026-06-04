@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      approval_audit_log: {
+        Row: {
+          action: string
+          actor_display_name: string | null
+          actor_user_id: string
+          created_at: string
+          draft_id: string
+          error_count: number
+          from_status: string | null
+          id: string
+          notes: string | null
+          to_status: string | null
+          validation_errors: Json
+          validation_warnings: Json
+          warning_count: number
+        }
+        Insert: {
+          action: string
+          actor_display_name?: string | null
+          actor_user_id: string
+          created_at?: string
+          draft_id: string
+          error_count?: number
+          from_status?: string | null
+          id?: string
+          notes?: string | null
+          to_status?: string | null
+          validation_errors?: Json
+          validation_warnings?: Json
+          warning_count?: number
+        }
+        Update: {
+          action?: string
+          actor_display_name?: string | null
+          actor_user_id?: string
+          created_at?: string
+          draft_id?: string
+          error_count?: number
+          from_status?: string | null
+          id?: string
+          notes?: string | null
+          to_status?: string | null
+          validation_errors?: Json
+          validation_warnings?: Json
+          warning_count?: number
+        }
+        Relationships: []
+      }
       discovered_stories: {
         Row: {
           author: string | null

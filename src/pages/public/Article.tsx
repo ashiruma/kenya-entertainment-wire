@@ -3,8 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Masthead } from "@/components/Masthead";
 import { ArrowLeft, ExternalLink, Link as LinkIcon } from "lucide-react";
-
-type SourceRef = { url: string; title?: string; notes?: string[] };
+import { noteText, noteSection, type SourceRef } from "@/lib/articleValidation";
 
 type Article = {
   id: string;
@@ -86,7 +85,17 @@ export default function PublicArticle() {
                   </a>
                   {s.notes && s.notes.length > 0 && (
                     <ul className="mt-1.5 pl-4 list-disc text-xs text-ink-light space-y-0.5">
-                      {s.notes.map((n, j) => <li key={j}>{n}</li>)}
+                      {s.notes.map((n, j) => {
+                        const text = noteText(n);
+                        const section = noteSection(n);
+                        if (!text) return null;
+                        return (
+                          <li key={j}>
+                            {section && <span className="inline-block bg-muted text-foreground text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded mr-1.5 font-mono">{section}</span>}
+                            {text}
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </li>
