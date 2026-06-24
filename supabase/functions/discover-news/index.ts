@@ -1,37 +1,10 @@
-// Discover entertainment news from Kenyan RSS feeds + optional Firecrawl deep-scrape
+// Discover entertainment news from DB-managed feeds + Firecrawl search queries
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-// Curated Kenyan + East African entertainment RSS feeds. Western Kenya focus via region tagging.
-const FEEDS = [
-  { url: "https://www.pulselive.co.ke/entertainment/rss", source: "Pulse Live Kenya" },
-  { url: "https://mpasho.co.ke/feed/", source: "Mpasho" },
-  { url: "https://www.standardmedia.co.ke/rss/entertainment.php", source: "Standard SDE" },
-  { url: "https://www.ghafla.com/ke/feed/", source: "Ghafla Kenya" },
-  { url: "https://www.capitalfm.co.ke/entertainment/feed/", source: "Capital FM" },
-  { url: "https://www.bizna.co.ke/category/entertainment/feed/", source: "Bizna Kenya" },
-  { url: "https://www.tuko.co.ke/entertainment/rss/", source: "Tuko Entertainment" },
-  { url: "https://nation.africa/kenya/life-and-style/rss.xml", source: "Nation Life & Style" },
-  // Expanded Kenyan + East African + Pan-African entertainment sources
-  { url: "https://www.the-star.co.ke/sasa/rss", source: "The Star Sasa" },
-  { url: "https://citizen.digital/entertainment/feed", source: "Citizen Digital" },
-  { url: "https://www.kenyans.co.ke/feeds/entertainment", source: "Kenyans.co.ke" },
-  { url: "https://www.nairobinews.co.ke/category/sleeq/feed/", source: "Nairobi News Sleeq" },
-  { url: "https://www.hivisasa.com/feed", source: "Hivisasa" },
-  { url: "https://kenyanvibe.com/feed/", source: "Kenyan Vibe" },
-  { url: "https://notjustok.com/feed/", source: "NotJustOk" },
-  { url: "https://www.bellanaija.com/feed/", source: "BellaNaija" },
-  { url: "https://thenativemag.com/feed/", source: "The Native" },
-  { url: "https://www.okayafrica.com/rss/", source: "OkayAfrica" },
-  { url: "https://music-in-africa.net/magazine/rss.xml", source: "Music In Africa" },
-  { url: "https://www.monitor.co.ug/uganda/magazine/full-woman/-/691260/691260/-/format/xhtml/-/14u5b15z/-/index.xml", source: "Daily Monitor UG" },
-  { url: "https://www.thecitizen.co.tz/tanzania/magazines/-/index.xml", source: "The Citizen TZ" },
-  { url: "https://www.newvision.co.ug/category/entertainment/feed", source: "New Vision UG" },
-];
 
 const WESTERN_KENYA_KEYWORDS = [
   "kakamega", "kisumu", "bungoma", "vihiga", "busia", "siaya", "homa bay", "migori",
