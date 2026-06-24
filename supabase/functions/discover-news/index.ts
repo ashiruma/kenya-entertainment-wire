@@ -16,6 +16,21 @@ const FEEDS = [
   { url: "https://www.bizna.co.ke/category/entertainment/feed/", source: "Bizna Kenya" },
   { url: "https://www.tuko.co.ke/entertainment/rss/", source: "Tuko Entertainment" },
   { url: "https://nation.africa/kenya/life-and-style/rss.xml", source: "Nation Life & Style" },
+  // Expanded Kenyan + East African + Pan-African entertainment sources
+  { url: "https://www.the-star.co.ke/sasa/rss", source: "The Star Sasa" },
+  { url: "https://citizen.digital/entertainment/feed", source: "Citizen Digital" },
+  { url: "https://www.kenyans.co.ke/feeds/entertainment", source: "Kenyans.co.ke" },
+  { url: "https://www.nairobinews.co.ke/category/sleeq/feed/", source: "Nairobi News Sleeq" },
+  { url: "https://www.hivisasa.com/feed", source: "Hivisasa" },
+  { url: "https://kenyanvibe.com/feed/", source: "Kenyan Vibe" },
+  { url: "https://notjustok.com/feed/", source: "NotJustOk" },
+  { url: "https://www.bellanaija.com/feed/", source: "BellaNaija" },
+  { url: "https://thenativemag.com/feed/", source: "The Native" },
+  { url: "https://www.okayafrica.com/rss/", source: "OkayAfrica" },
+  { url: "https://music-in-africa.net/magazine/rss.xml", source: "Music In Africa" },
+  { url: "https://www.monitor.co.ug/uganda/magazine/full-woman/-/691260/691260/-/format/xhtml/-/14u5b15z/-/index.xml", source: "Daily Monitor UG" },
+  { url: "https://www.thecitizen.co.tz/tanzania/magazines/-/index.xml", source: "The Citizen TZ" },
+  { url: "https://www.newvision.co.ug/category/entertainment/feed", source: "New Vision UG" },
 ];
 
 const WESTERN_KENYA_KEYWORDS = [
@@ -156,6 +171,18 @@ Deno.serve(async (req) => {
       "Nairobi nightlife festival lineup",
       "Kenyan comedian podcast TikTok trending",
       "Gengetone Bongo Afrobeats new release Kenya",
+      "East Africa music tour Uganda Tanzania Rwanda concert",
+      "African entertainment legend tribute biopic documentary",
+      "Kisumu Kakamega Bungoma Eldoret event festival lineup",
+      "Kenyan Luhya gospel benga ohangla new song",
+      "Showmax Netflix Africa premiere Kenyan cast",
+      "Diamond Platnumz Sauti Sol Nyashinski Khaligraph new",
+      "Kenyan fashion designer red carpet awards",
+      "African film festival award winner Kenya nomination",
+      "Kenyan influencer YouTuber TikTok viral video",
+      "Luo Luhya Kalenjin wedding traditional music star",
+      "Western Kenya theatre play performance Kakamega Kisumu",
+      "Kenya DJ producer beat single drop release",
     ];
     const [rss, search] = await Promise.all([
       Promise.all(FEEDS.map((f) => fetchFeed(f.url, f.source))).then((r) => r.flat()),
