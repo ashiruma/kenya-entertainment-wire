@@ -4,7 +4,7 @@ import { Masthead } from "@/components/Masthead";
 import { useAuth } from "@/lib/auth";
 import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { RefreshCw, Sparkles, MapPin, Clock, ExternalLink } from "lucide-react";
+import { RefreshCw, Sparkles, MapPin, Clock, ExternalLink, Eye, X } from "lucide-react";
 
 type Story = {
   id: string;
@@ -18,6 +18,8 @@ type Story = {
   status: string;
   published_at: string | null;
   created_at: string;
+  highlights?: string[] | null;
+  preview_summary?: string | null;
 };
 
 export default function Discover() {
@@ -27,6 +29,7 @@ export default function Discover() {
   const [filter, setFilter] = useState<"all" | "western_kenya" | "national">("all");
   const [discovering, setDiscovering] = useState(false);
   const [writingId, setWritingId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<Story | null>(null);
 
   const load = async () => {
     let q = supabase
@@ -204,6 +207,12 @@ export default function Discover() {
                   {s.excerpt && <p className="text-sm text-ink-mid line-clamp-2 mb-3">{s.excerpt}</p>}
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
+                      onClick={() => setPreview(s)}
+                      className="bg-foreground text-background px-3 py-1.5 rounded text-xs font-medium hover:opacity-90 transition flex items-center gap-1.5"
+                    >
+                      <Eye size={12} /> Preview
+                    </button>
+                    <button
                       onClick={() => writeDraft(s)}
                       disabled={writingId === s.id}
                       className="bg-primary text-primary-foreground px-3 py-1.5 rounded text-xs font-medium hover:bg-primary-mid transition flex items-center gap-1.5 disabled:opacity-50"
@@ -222,6 +231,62 @@ export default function Discover() {
           </div>
         )}
       </main>
+
+      {preview && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
+          <div className="bg-background rounded shadow-card max-w-2xl w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 p-5 border-b border-border sticky top-0 bg-background">
+              <div>
+                <div className="label-eyebrow text-primary mb-1">Discovery preview</div>
+                <h2 className="font-display text-xl leading-snug">{preview.title}</h2>
+                <div className="text-xs text-ink-light mt-1 flex items-center gap-2 flex-wrap">
+                  <span className="font-mono-amaica uppercase tracking-wider text-primary">{preview.source}</span>
+                  {preview.region === "western_kenya" && <span className="bg-accent text-accent-foreground px-1.5 py-0.5 rounded-sm">Western KE</span>}
+                  {preview.published_at && <span>{new Date(preview.published_at).toLocaleString()}</span>}
+                </div>
+              </div>
+              <button onClick={() => setPreview(null)} className="text-ink-light hover:text-foreground"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              {preview.image_url && <img src={preview.image_url} alt="" className="w-full rounded" />}
+              {preview.preview_summary && (
+                <div>
+                  <div className="label-eyebrow text-primary mb-1">Summary</div>
+                  <p className="text-sm text-ink-mid leading-relaxed">{preview.preview_summary}</p>
+                </div>
+              )}
+              {preview.highlights && preview.highlights.length > 0 && (
+                <div>
+                  <div className="label-eyebrow text-primary mb-1">Extracted highlights</div>
+                  <ul className="space-y-1.5 text-sm">
+                    {preview.highlights.map((h, i) => (
+                      <li key={i} className="border-l-2 border-primary pl-3">{h}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {(!preview.highlights || preview.highlights.length === 0) && preview.excerpt && (
+                <div>
+                  <div className="label-eyebrow text-primary mb-1">Excerpt</div>
+                  <p className="text-sm text-ink-mid leading-relaxed">{preview.excerpt}</p>
+                </div>
+              )}
+              <div className="flex items-center gap-2 pt-2 border-t border-border">
+                <button
+                  onClick={() => { const s = preview; setPreview(null); writeDraft(s); }}
+                  className="bg-primary text-primary-foreground px-4 py-2 rounded text-sm font-medium hover:bg-primary-mid flex items-center gap-2"
+                >
+                  <Sparkles size={14} /> Proceed to draft
+                </button>
+                <a href={preview.source_url} target="_blank" rel="noopener noreferrer" className="text-sm text-ink-light hover:text-primary flex items-center gap-1 px-3 py-2">
+                  <ExternalLink size={12} /> Open source
+                </a>
+                <button onClick={() => { skip(preview.id); setPreview(null); }} className="text-sm text-ink-light hover:text-destructive px-3 py-2">Skip</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
