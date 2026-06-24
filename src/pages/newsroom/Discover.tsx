@@ -41,7 +41,7 @@ export default function Discover() {
       .limit(60);
     const { data, error } = await q;
     if (error) toast.error(error.message);
-    else setStories(data || []);
+    else setStories((data || []) as unknown as Story[]);
   };
 
   useEffect(() => {
