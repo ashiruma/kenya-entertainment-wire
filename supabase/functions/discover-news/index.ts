@@ -153,6 +153,24 @@ Deno.serve(async (req) => {
   let trigger = "manual";
   try { const body = await req.json(); if (body?.trigger) trigger = String(body.trigger); } catch { /* no body */ }
 
+  // Scheduler gate: when invoked by cron, respect settings.enabled + interval
+  if (trigger === "cron") {
+    const { data: settings } = await supabase.from("discovery_settings").select("*").maybeSingle();
+    if (!settings?.enabled) {
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: "scheduler_disabled" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const intervalMs = (settings.interval_minutes ?? 60) * 60 * 1000;
+    const cutoff = new Date(Date.now() - intervalMs + 30_000).toISOString();
+    const { data: recent } = await supabase
+      .from("discovery_runs").select("id, started_at")
+      .gte("started_at", cutoff).order("started_at", { ascending: false }).limit(1);
+    if (recent && recent.length > 0) {
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: "interval_not_elapsed" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
   // Overlap guard: refuse if another run started in the last 10 minutes and is still "running"
   const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   const { data: active } = await supabase
