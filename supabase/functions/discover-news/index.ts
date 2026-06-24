@@ -124,87 +124,190 @@ async function firecrawlSearch(query: string): Promise<Array<{
   }
 }
 
+// Normalize a title for dedup: lowercase, drop punctuation/numbers, collapse spaces, take first ~80 chars
+function normalizeTitle(t: string): string {
+  return t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+}
+function hostOf(u: string): string {
+  try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; }
+}
+async function sha1(s: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function extractHighlights(text: string): string[] {
+  if (!text) return [];
+  const sents = text.replace(/\s+/g, " ").split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter((s) => s.length > 30 && s.length < 280);
+  return sents.slice(0, 4);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  // Parse trigger source
+  let trigger = "manual";
+  try { const body = await req.json(); if (body?.trigger) trigger = String(body.trigger); } catch { /* no body */ }
+
+  // Overlap guard: refuse if another run started in the last 10 minutes and is still "running"
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { data: active } = await supabase
+    .from("discovery_runs")
+    .select("id, started_at")
+    .eq("status", "running")
+    .gte("started_at", tenMinAgo)
+    .limit(1);
+  if (active && active.length > 0) {
+    return new Response(
+      JSON.stringify({ success: false, skipped: true, reason: "another_run_in_progress", run_id: active[0].id }),
+      { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
+  }
 
-    // Fetch all RSS feeds + Firecrawl search queries in parallel
-    const SEARCH_QUERIES = [
-      "Kenya entertainment celebrity news today -politics -election",
-      "Western Kenya music event Kakamega Kisumu Bungoma concert",
-      "Kenyan celebrity gossip showbiz this week",
-      "Kenyan new music release song album",
-      "Luhya Luo artist musician Kenya",
-      "Kenya film TV show Netflix premiere",
-      "Nairobi nightlife festival lineup",
-      "Kenyan comedian podcast TikTok trending",
-      "Gengetone Bongo Afrobeats new release Kenya",
-      "East Africa music tour Uganda Tanzania Rwanda concert",
-      "African entertainment legend tribute biopic documentary",
-      "Kisumu Kakamega Bungoma Eldoret event festival lineup",
-      "Kenyan Luhya gospel benga ohangla new song",
-      "Showmax Netflix Africa premiere Kenyan cast",
-      "Diamond Platnumz Sauti Sol Nyashinski Khaligraph new",
-      "Kenyan fashion designer red carpet awards",
-      "African film festival award winner Kenya nomination",
-      "Kenyan influencer YouTuber TikTok viral video",
-      "Luo Luhya Kalenjin wedding traditional music star",
-      "Western Kenya theatre play performance Kakamega Kisumu",
-      "Kenya DJ producer beat single drop release",
-    ];
-    const [rss, search] = await Promise.all([
-      Promise.all(FEEDS.map((f) => fetchFeed(f.url, f.source))).then((r) => r.flat()),
-      Promise.all(SEARCH_QUERIES.map((q) => firecrawlSearch(q))).then((r) => r.flat()),
-    ]);
-    const items = [...rss, ...search];
+  // Open run
+  const { data: runRow, error: runErr } = await supabase
+    .from("discovery_runs")
+    .insert({ trigger, status: "running" })
+    .select()
+    .single();
+  if (runErr) {
+    return new Response(JSON.stringify({ success: false, error: runErr.message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  const runId = runRow.id as string;
+  const errors: Array<{ feed_id?: string; name: string; error: string }> = [];
+  const feedStats: Array<{ feed_id: string; name: string; fetched: number; accepted: number; rejected: number; duplicates: number }> = [];
 
-    // Filter to entertainment-ish keywords (very loose) and de-dupe
+  try {
+    // Load enabled feeds & queries
+    const { data: feeds, error: fErr } = await supabase
+      .from("discovery_feeds").select("*").eq("enabled", true);
+    if (fErr) throw fErr;
+    const rssFeeds = (feeds || []).filter((f) => f.kind === "rss" && f.url);
+    const queryFeeds = (feeds || []).filter((f) => f.kind === "query" && f.query);
+
+    type Item = {
+      title: string; source: string; source_url: string; excerpt: string;
+      image_url: string | null; author?: string | null;
+      category: string; region: string; published_at: string | null;
+      feed_id: string;
+    };
+
+    const rssResults = await Promise.all(rssFeeds.map(async (f) => {
+      try {
+        const items = await fetchFeed(f.url!, f.name);
+        return { feed: f, items: items.map((i) => ({ ...i, feed_id: f.id })) as Item[], error: null as string | null };
+      } catch (e) {
+        return { feed: f, items: [] as Item[], error: e instanceof Error ? e.message : String(e) };
+      }
+    }));
+    const searchResults = await Promise.all(queryFeeds.map(async (f) => {
+      try {
+        const items = await firecrawlSearch(f.query!);
+        return { feed: f, items: items.map((i) => ({ ...i, feed_id: f.id })) as Item[], error: null as string | null };
+      } catch (e) {
+        return { feed: f, items: [] as Item[], error: e instanceof Error ? e.message : String(e) };
+      }
+    }));
+    const allResults = [...rssResults, ...searchResults];
+
     const ent = /(music|song|album|artist|concert|festival|film|movie|tv|drama|celeb|actor|actress|singer|rapper|dj|netflix|show|premiere|award|nomin|tour|gospel|gengetone|bongo|afrobeat|comedy|comedian|podcast|tiktok|youtube|fashion|culture|nightlife|club|dance|theatre|theater|play|sauti|nyashinski|khaligraph|bahati|otile|sde|mpasho)/i;
-    // Hard exclude politics, hard news, crime, business/finance noise
     const politicsBlock = /(politic|election|parliament|senate|senator|mp\b|governor|president|ruto|raila|uhuru|kenyatta|odinga|cabinet|ministry|minister|impeach|bill\s|county\s+assembly|azimio|kenya\s+kwanza|udaa?|orange\s+democratic|wiper|jubilee|ford\s+kenya|protest|maandamano|gen[\s-]?z\s+protest|ethnic|tribal|war|terror|al[-\s]?shabaab|coup|sanction|diplomat|treaty|geopolit|military|army\s|police\s+kill|murder|assassinat|corruption|graft|scandal|court\s+case|judge|judiciary|supreme\s+court|high\s+court|kdf|nis\b|dci\b|ipoa)/i;
-    const seen = new Set<string>();
-    const filtered = items.filter((i) => {
-      if (seen.has(i.source_url)) return false;
-      seen.add(i.source_url);
-      const blob = `${i.title} ${i.excerpt}`;
-      if (politicsBlock.test(blob)) return false;
-      const looksEntertainment = ent.test(blob) || /entertainment|sde|buzz|pulse|mpasho|ghafla|capital/i.test(i.source);
-      return looksEntertainment;
-    });
 
-    // Sort: Western Kenya first, then by date
-    filtered.sort((a, b) => {
-      if (a.region !== b.region) return a.region === "western_kenya" ? -1 : 1;
-      const da = a.published_at ? new Date(a.published_at).getTime() : 0;
-      const db = b.published_at ? new Date(b.published_at).getTime() : 0;
-      return db - da;
-    });
+    let fetchedCount = 0, insertedCount = 0, duplicateCount = 0, rejectedCount = 0, filteredCount = 0;
+    const seenHash = new Set<string>();
 
-    const top = filtered.slice(0, 40);
+    for (const r of allResults) {
+      const stats = { feed_id: r.feed.id as string, name: r.feed.name as string, fetched: r.items.length, accepted: 0, rejected: 0, duplicates: 0 };
+      fetchedCount += r.items.length;
+      if (r.error) {
+        errors.push({ feed_id: r.feed.id, name: r.feed.name, error: r.error });
+        await supabase.from("discovery_feeds").update({
+          last_fetched_at: new Date().toISOString(),
+          last_status: "error",
+          last_error: r.error.slice(0, 500),
+          last_item_count: 0,
+        }).eq("id", r.feed.id);
+        feedStats.push(stats);
+        continue;
+      }
 
-    // Upsert (ignore duplicates via unique source_url)
-    let inserted = 0;
-    for (const item of top) {
-      const { error } = await supabase
-        .from("discovered_stories")
-        .insert(item);
-      if (!error) inserted++;
+      for (const item of r.items) {
+        const blob = `${item.title} ${item.excerpt}`;
+        let reason: string | null = null;
+        if (politicsBlock.test(blob)) reason = "politics_or_hard_news";
+        else if (!(ent.test(blob) || /entertainment|sde|buzz|pulse|mpasho|ghafla|capital/i.test(item.source))) reason = "non_entertainment";
+
+        const hash = await sha1(`${normalizeTitle(item.title)}|${hostOf(item.source_url)}`);
+        if (seenHash.has(hash)) {
+          stats.duplicates++; duplicateCount++; continue;
+        }
+        seenHash.add(hash);
+
+        if (reason) {
+          // Record rejection (best-effort) — still try to dedup-insert so analytics has data
+          const { error: insErr } = await supabase.from("discovered_stories").insert({
+            ...item, dedupe_hash: hash, status: "rejected", rejection_reason: reason,
+            highlights: extractHighlights(item.excerpt),
+          });
+          if (!insErr) { stats.rejected++; rejectedCount++; }
+          else if (insErr.code === "23505") { stats.duplicates++; duplicateCount++; }
+          continue;
+        }
+
+        const { error: insErr } = await supabase.from("discovered_stories").insert({
+          ...item, dedupe_hash: hash, status: "new",
+          highlights: extractHighlights(item.excerpt),
+          preview_summary: item.excerpt?.slice(0, 280) || null,
+        });
+        if (!insErr) { stats.accepted++; insertedCount++; filteredCount++; }
+        else if (insErr.code === "23505") { stats.duplicates++; duplicateCount++; }
+        else errors.push({ feed_id: r.feed.id, name: r.feed.name, error: insErr.message });
+      }
+
+      await supabase.from("discovery_feeds").update({
+        last_fetched_at: new Date().toISOString(),
+        last_status: "ok",
+        last_error: null,
+        last_item_count: r.items.length,
+        total_accepted: (r.feed.total_accepted ?? 0) + stats.accepted,
+        total_rejected: (r.feed.total_rejected ?? 0) + stats.rejected,
+        total_duplicates: (r.feed.total_duplicates ?? 0) + stats.duplicates,
+      }).eq("id", r.feed.id);
+      feedStats.push(stats);
     }
 
+    const finalStatus = errors.length === 0 ? "success" : (insertedCount > 0 ? "partial" : "failed");
+    await supabase.from("discovery_runs").update({
+      finished_at: new Date().toISOString(),
+      status: finalStatus,
+      fetched_count: fetchedCount,
+      filtered_count: filteredCount,
+      inserted_count: insertedCount,
+      duplicate_count: duplicateCount,
+      rejected_count: rejectedCount,
+      errors, feed_stats: feedStats,
+    }).eq("id", runId);
+
     return new Response(
-      JSON.stringify({ success: true, fetched: items.length, filtered: filtered.length, inserted }),
+      JSON.stringify({
+        success: true, run_id: runId, status: finalStatus,
+        fetched: fetchedCount, inserted: insertedCount,
+        duplicates: duplicateCount, rejected: rejectedCount, errors: errors.length,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
-    console.error("discover-news error:", e);
-    return new Response(
-      JSON.stringify({ success: false, error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    await supabase.from("discovery_runs").update({
+      finished_at: new Date().toISOString(), status: "failed",
+      errors: [...errors, { name: "run", error: msg }], feed_stats: feedStats,
+    }).eq("id", runId);
+    return new Response(JSON.stringify({ success: false, run_id: runId, error: msg }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
