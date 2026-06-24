@@ -38,7 +38,7 @@ export default function DiscoveryAdmin() {
       supabase.from("discovered_stories").select("region,status,rejection_reason,feed_id").limit(2000),
     ]);
     if (f.data) setFeeds(f.data as Feed[]);
-    if (r.data) setRuns(r.data as Run[]);
+    if (r.data) setRuns(r.data as unknown as Run[]);
     if (s.data) setSettings({ enabled: s.data.enabled, interval_minutes: s.data.interval_minutes });
     if (st.data) setStories(st.data as Story[]);
   };
