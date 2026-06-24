@@ -67,12 +67,17 @@ export type Database = {
           author: string | null
           category: string | null
           created_at: string
+          dedupe_hash: string | null
           excerpt: string | null
+          feed_id: string | null
+          highlights: Json | null
           id: string
           image_url: string | null
+          preview_summary: string | null
           published_at: string | null
           raw_content: string | null
           region: string | null
+          rejection_reason: string | null
           source: string
           source_url: string
           status: string
@@ -82,12 +87,17 @@ export type Database = {
           author?: string | null
           category?: string | null
           created_at?: string
+          dedupe_hash?: string | null
           excerpt?: string | null
+          feed_id?: string | null
+          highlights?: Json | null
           id?: string
           image_url?: string | null
+          preview_summary?: string | null
           published_at?: string | null
           raw_content?: string | null
           region?: string | null
+          rejection_reason?: string | null
           source: string
           source_url: string
           status?: string
@@ -97,16 +107,152 @@ export type Database = {
           author?: string | null
           category?: string | null
           created_at?: string
+          dedupe_hash?: string | null
           excerpt?: string | null
+          feed_id?: string | null
+          highlights?: Json | null
           id?: string
           image_url?: string | null
+          preview_summary?: string | null
           published_at?: string | null
           raw_content?: string | null
           region?: string | null
+          rejection_reason?: string | null
           source?: string
           source_url?: string
           status?: string
           title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discovered_stories_feed_id_fkey"
+            columns: ["feed_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_feeds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discovery_feeds: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          kind: string
+          last_error: string | null
+          last_fetched_at: string | null
+          last_item_count: number
+          last_status: string | null
+          name: string
+          query: string | null
+          total_accepted: number
+          total_duplicates: number
+          total_rejected: number
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          kind: string
+          last_error?: string | null
+          last_fetched_at?: string | null
+          last_item_count?: number
+          last_status?: string | null
+          name: string
+          query?: string | null
+          total_accepted?: number
+          total_duplicates?: number
+          total_rejected?: number
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          kind?: string
+          last_error?: string | null
+          last_fetched_at?: string | null
+          last_item_count?: number
+          last_status?: string | null
+          name?: string
+          query?: string | null
+          total_accepted?: number
+          total_duplicates?: number
+          total_rejected?: number
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
+      discovery_runs: {
+        Row: {
+          created_at: string
+          duplicate_count: number
+          errors: Json
+          feed_stats: Json
+          fetched_count: number
+          filtered_count: number
+          finished_at: string | null
+          id: string
+          inserted_count: number
+          rejected_count: number
+          started_at: string
+          status: string
+          trigger: string
+        }
+        Insert: {
+          created_at?: string
+          duplicate_count?: number
+          errors?: Json
+          feed_stats?: Json
+          fetched_count?: number
+          filtered_count?: number
+          finished_at?: string | null
+          id?: string
+          inserted_count?: number
+          rejected_count?: number
+          started_at?: string
+          status?: string
+          trigger?: string
+        }
+        Update: {
+          created_at?: string
+          duplicate_count?: number
+          errors?: Json
+          feed_stats?: Json
+          fetched_count?: number
+          filtered_count?: number
+          finished_at?: string | null
+          id?: string
+          inserted_count?: number
+          rejected_count?: number
+          started_at?: string
+          status?: string
+          trigger?: string
+        }
+        Relationships: []
+      }
+      discovery_settings: {
+        Row: {
+          enabled: boolean
+          id: boolean
+          interval_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          enabled?: boolean
+          id?: boolean
+          interval_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          enabled?: boolean
+          id?: boolean
+          interval_minutes?: number
+          updated_at?: string
         }
         Relationships: []
       }
