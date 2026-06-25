@@ -140,7 +140,8 @@ export default function DiscoveryAdmin() {
   };
 
   const updateFeedField = async (f: Feed, field: "priority" | "weight", value: number) => {
-    const { error } = await supabase.from("discovery_feeds").update({ [field]: value }).eq("id", f.id);
+    const patch = field === "priority" ? { priority: value } : { weight: value };
+    const { error } = await supabase.from("discovery_feeds").update(patch).eq("id", f.id);
     if (error) toast.error(error.message);
     else setFeeds(feeds.map((x) => x.id === f.id ? { ...x, [field]: value } : x));
   };
