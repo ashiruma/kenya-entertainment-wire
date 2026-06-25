@@ -1,6 +1,7 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { LogOut, User as UserIcon } from "lucide-react";
+import { DiscoveryRunNotifier } from "@/components/DiscoveryRunNotifier";
 
 export function Masthead({ variant = "newsroom" }: { variant?: "newsroom" | "public" }) {
   const { user, signOut, isAdmin, isEditor } = useAuth();
@@ -8,6 +9,7 @@ export function Masthead({ variant = "newsroom" }: { variant?: "newsroom" | "pub
 
   return (
     <>
+      <DiscoveryRunNotifier />
       <header className="bg-primary text-primary-foreground border-b-[3px] border-accent sticky top-0 z-40">
         <div className="flex items-center justify-between px-4 sm:px-6 h-14">
           <Link to="/" className="font-display text-xl font-bold tracking-tight">
