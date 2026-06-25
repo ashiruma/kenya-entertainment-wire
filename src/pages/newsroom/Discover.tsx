@@ -4,7 +4,7 @@ import { Masthead } from "@/components/Masthead";
 import { useAuth } from "@/lib/auth";
 import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { RefreshCw, Sparkles, MapPin, Clock, ExternalLink, Eye, X } from "lucide-react";
+import { RefreshCw, Sparkles, MapPin, Clock, ExternalLink, Eye, X, Square, CheckSquare } from "lucide-react";
 
 type Story = {
   id: string;
@@ -30,6 +30,9 @@ export default function Discover() {
   const [discovering, setDiscovering] = useState(false);
   const [writingId, setWritingId] = useState<string | null>(null);
   const [preview, setPreview] = useState<Story | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkPreview, setBulkPreview] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   const load = async () => {
     let q = supabase
@@ -65,7 +68,7 @@ export default function Discover() {
     }
   };
 
-  const writeDraft = async (story: Story) => {
+  const writeDraft = async (story: Story, opts?: { skipNavigate?: boolean }) => {
     setWritingId(story.id);
     try {
       // Try deep-scrape; on Firecrawl 403/402/etc fall back to RSS title + excerpt
@@ -134,10 +137,14 @@ export default function Discover() {
       }).select().single();
       if (dErr) throw dErr;
       await supabase.from("discovered_stories").update({ status: "used" }).eq("id", story.id);
-      toast.success("Draft created");
-      navigate(`/newsroom/draft/${draft.id}`);
+      setStories((prev) => prev.filter((x) => x.id !== story.id));
+      if (!opts?.skipNavigate) {
+        toast.success("Draft created");
+        navigate(`/newsroom/draft/${draft.id}`);
+      }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Writing failed");
+      if (!opts?.skipNavigate) toast.error(e instanceof Error ? e.message : "Writing failed");
+      throw e;
     } finally {
       setWritingId(null);
     }
@@ -149,6 +156,31 @@ export default function Discover() {
   };
 
   const filtered = filter === "all" ? stories : stories.filter((s) => s.region === filter);
+  const selectedStories = filtered.filter((s) => selected.has(s.id));
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
+  const selectAllVisible = () => {
+    if (filtered.length > 0 && filtered.every((s) => selected.has(s.id))) setSelected(new Set());
+    else setSelected(new Set(filtered.map((s) => s.id)));
+  };
+  const bulkDraft = async () => {
+    if (selectedStories.length === 0) return;
+    setBulkProgress({ done: 0, total: selectedStories.length });
+    let ok = 0, fail = 0;
+    for (const s of selectedStories) {
+      try { await writeDraft(s, { skipNavigate: true }); ok++; }
+      catch { fail++; }
+      setBulkProgress((p) => p ? { ...p, done: p.done + 1 } : p);
+    }
+    setBulkProgress(null);
+    setSelected(new Set());
+    setBulkPreview(false);
+    toast.success(`Created ${ok} draft${ok === 1 ? "" : "s"}${fail ? ` · ${fail} failed` : ""}`);
+    navigate("/newsroom/drafts");
+  };
 
   return (
     <div className="min-h-screen bg-background">
