@@ -10,6 +10,7 @@ type Feed = {
   id: string; kind: "rss" | "query"; name: string; url: string | null; query: string | null;
   enabled: boolean; last_fetched_at: string | null; last_status: string | null; last_error: string | null;
   last_item_count: number; total_accepted: number; total_rejected: number; total_duplicates: number;
+  priority: number; weight: number;
 };
 type Run = {
   id: string; started_at: string; finished_at: string | null; status: string; trigger: string;
@@ -29,6 +30,7 @@ export default function DiscoveryAdmin() {
   const [newKind, setNewKind] = useState<"rss" | "query">("rss");
   const [newName, setNewName] = useState("");
   const [newValue, setNewValue] = useState("");
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
   const load = async () => {
     const [f, r, s, st] = await Promise.all([
@@ -43,6 +45,26 @@ export default function DiscoveryAdmin() {
     if (st.data) setStories(st.data as Story[]);
   };
   useEffect(() => { if (user && isEditor) load(); }, [user, isEditor]);
+
+  // Live-poll the active run while one is in progress
+  useEffect(() => {
+    if (!activeRunId) return;
+    const t = setInterval(async () => {
+      const { data } = await supabase.from("discovery_runs").select("*").eq("id", activeRunId).maybeSingle();
+      if (data) {
+        setRuns((prev) => {
+          const others = prev.filter((r) => r.id !== data.id);
+          return [data as unknown as Run, ...others].slice(0, 20);
+        });
+        if (data.finished_at) {
+          setActiveRunId(null);
+          toast.success(`Run finished — accepted ${data.inserted_count}, rejected ${data.rejected_count}, dupes ${data.duplicate_count}`);
+          load();
+        }
+      }
+    }, 2500);
+    return () => clearInterval(t);
+  }, [activeRunId]);
 
   const analytics = useMemo(() => {
     const byFeed = new Map<string, { accepted: number; used: number; rejected: number; skipped: number; total: number }>();
@@ -101,12 +123,26 @@ export default function DiscoveryAdmin() {
   const runNow = async () => {
     setBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke("discover-news", { body: { trigger: "manual" } });
-      if (error) throw error;
-      toast.success(`Run ${data?.status || "ok"} — inserted ${data?.inserted ?? 0}, dupes ${data?.duplicates ?? 0}, rejected ${data?.rejected ?? 0}`);
-      await load();
+      toast.message("Discovery starting…");
+      // fire-and-poll so the UI shows live status
+      supabase.functions.invoke("discover-news", { body: { trigger: "manual" } }).then(({ data, error }) => {
+        if (error) toast.error(error.message);
+        else if (data?.skipped) toast.message(`Skipped: ${data.reason}`);
+      });
+      // Wait briefly for the run row to be created, then start polling
+      setTimeout(async () => {
+        const { data } = await supabase.from("discovery_runs").select("id").is("finished_at", null).order("started_at", { ascending: false }).limit(1);
+        if (data && data[0]) setActiveRunId(data[0].id);
+        await load();
+      }, 1500);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Run failed"); }
     finally { setBusy(false); }
+  };
+
+  const updateFeedField = async (f: Feed, field: "priority" | "weight", value: number) => {
+    const { error } = await supabase.from("discovery_feeds").update({ [field]: value }).eq("id", f.id);
+    if (error) toast.error(error.message);
+    else setFeeds(feeds.map((x) => x.id === f.id ? { ...x, [field]: value } : x));
   };
 
   const StatusIcon = ({ s }: { s: string | null }) => {
@@ -185,7 +221,7 @@ export default function DiscoveryAdmin() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wider text-ink-light border-b border-border">
-                <tr><th className="py-2">On</th><th>Kind</th><th>Name</th><th>URL / Query</th><th>Last fetched</th><th>Status</th><th>Items</th><th>Accepted</th><th>Rejected</th><th>Dupes</th><th></th></tr>
+                <tr><th className="py-2">On</th><th>Kind</th><th>Name</th><th>URL / Query</th><th title="Higher runs first">Pri</th><th title="Bias for ordering">Wt</th><th>Last fetched</th><th>Status</th><th>Items</th><th>Accepted</th><th>Rejected</th><th>Dupes</th><th></th></tr>
               </thead>
               <tbody>
                 {feeds.map((f) => {
@@ -196,6 +232,8 @@ export default function DiscoveryAdmin() {
                       <td className="text-xs uppercase">{f.kind}</td>
                       <td className="font-medium">{f.name}</td>
                       <td className="text-xs text-ink-mid max-w-[260px] truncate" title={f.url || f.query || ""}>{f.url || f.query}</td>
+                      <td><input type="number" value={f.priority ?? 0} onChange={(e) => updateFeedField(f, "priority", parseInt(e.target.value || "0"))} className="w-14 border border-border rounded px-1 py-0.5 text-xs" /></td>
+                      <td><input type="number" step="0.1" value={f.weight ?? 1} onChange={(e) => updateFeedField(f, "weight", parseFloat(e.target.value || "1"))} className="w-16 border border-border rounded px-1 py-0.5 text-xs" /></td>
                       <td className="text-xs">{f.last_fetched_at ? new Date(f.last_fetched_at).toLocaleString() : "—"}</td>
                       <td><div className="flex items-center gap-1"><StatusIcon s={f.last_status} />{f.last_error && <span title={f.last_error}><AlertTriangle size={12} className="text-amber-600" /></span>}</div></td>
                       <td className="text-xs">{f.last_item_count}</td>
@@ -209,6 +247,11 @@ export default function DiscoveryAdmin() {
               </tbody>
             </table>
           </div>
+          {activeRunId && (
+            <div className="mt-3 text-xs text-primary flex items-center gap-2">
+              <RefreshCw size={12} className="animate-spin" /> Live run in progress — table updates every few seconds.
+            </div>
+          )}
         </section>
 
         {/* Runs */}
