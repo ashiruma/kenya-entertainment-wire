@@ -347,6 +347,49 @@ export default function Discover() {
           </div>
         </div>
       )}
+
+      {bulkPreview && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setBulkPreview(false)}>
+          <div className="bg-background rounded shadow-card max-w-3xl w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 p-5 border-b border-border sticky top-0 bg-background">
+              <div>
+                <div className="label-eyebrow text-primary mb-1">Bulk preview</div>
+                <h2 className="font-display text-xl">{selectedStories.length} stories selected</h2>
+                <p className="text-xs text-ink-light mt-1">Review highlights, then create drafts for all in one click.</p>
+              </div>
+              <button onClick={() => setBulkPreview(false)} className="text-ink-light hover:text-foreground"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              {selectedStories.map((s) => (
+                <div key={s.id} className="border border-border rounded p-4">
+                  <div className="flex items-center gap-2 mb-1 text-[11px]">
+                    <span className="font-mono-amaica text-primary uppercase tracking-wider">{s.source}</span>
+                    {s.region === "western_kenya" && <span className="bg-accent text-accent-foreground px-1.5 py-0.5 rounded-sm">Western KE</span>}
+                  </div>
+                  <h3 className="font-display text-base leading-snug mb-1">{s.title}</h3>
+                  {s.preview_summary && <p className="text-xs text-ink-mid mb-2 line-clamp-3">{s.preview_summary}</p>}
+                  {s.highlights && s.highlights.length > 0 && (
+                    <ul className="text-xs space-y-1 mt-2">
+                      {s.highlights.slice(0, 3).map((h, i) => <li key={i} className="border-l-2 border-primary pl-2 text-ink-mid">{h}</li>)}
+                    </ul>
+                  )}
+                </div>
+              ))}
+              <div className="flex items-center gap-2 pt-2 border-t border-border sticky bottom-0 bg-background py-3">
+                <button
+                  onClick={bulkDraft}
+                  disabled={!!bulkProgress}
+                  className="bg-primary text-primary-foreground px-4 py-2 rounded text-sm font-medium hover:bg-primary-mid flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Sparkles size={14} />
+                  {bulkProgress ? `Drafting ${bulkProgress.done}/${bulkProgress.total}…` : `Create ${selectedStories.length} drafts`}
+                </button>
+                <button onClick={() => setBulkPreview(false)} className="text-sm text-ink-light hover:text-foreground px-3 py-2">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
