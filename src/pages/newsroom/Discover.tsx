@@ -4,7 +4,7 @@ import { Masthead } from "@/components/Masthead";
 import { useAuth } from "@/lib/auth";
 import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { RefreshCw, Sparkles, MapPin, Clock, ExternalLink, Eye, X } from "lucide-react";
+import { RefreshCw, Sparkles, MapPin, Clock, ExternalLink, Eye, X, Square, CheckSquare } from "lucide-react";
 
 type Story = {
   id: string;
@@ -30,6 +30,9 @@ export default function Discover() {
   const [discovering, setDiscovering] = useState(false);
   const [writingId, setWritingId] = useState<string | null>(null);
   const [preview, setPreview] = useState<Story | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkPreview, setBulkPreview] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   const load = async () => {
     let q = supabase
@@ -65,7 +68,7 @@ export default function Discover() {
     }
   };
 
-  const writeDraft = async (story: Story) => {
+  const writeDraft = async (story: Story, opts?: { skipNavigate?: boolean }) => {
     setWritingId(story.id);
     try {
       // Try deep-scrape; on Firecrawl 403/402/etc fall back to RSS title + excerpt
@@ -134,10 +137,14 @@ export default function Discover() {
       }).select().single();
       if (dErr) throw dErr;
       await supabase.from("discovered_stories").update({ status: "used" }).eq("id", story.id);
-      toast.success("Draft created");
-      navigate(`/newsroom/draft/${draft.id}`);
+      setStories((prev) => prev.filter((x) => x.id !== story.id));
+      if (!opts?.skipNavigate) {
+        toast.success("Draft created");
+        navigate(`/newsroom/draft/${draft.id}`);
+      }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Writing failed");
+      if (!opts?.skipNavigate) toast.error(e instanceof Error ? e.message : "Writing failed");
+      throw e;
     } finally {
       setWritingId(null);
     }
@@ -149,6 +156,31 @@ export default function Discover() {
   };
 
   const filtered = filter === "all" ? stories : stories.filter((s) => s.region === filter);
+  const selectedStories = filtered.filter((s) => selected.has(s.id));
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
+  const selectAllVisible = () => {
+    if (filtered.length > 0 && filtered.every((s) => selected.has(s.id))) setSelected(new Set());
+    else setSelected(new Set(filtered.map((s) => s.id)));
+  };
+  const bulkDraft = async () => {
+    if (selectedStories.length === 0) return;
+    setBulkProgress({ done: 0, total: selectedStories.length });
+    let ok = 0, fail = 0;
+    for (const s of selectedStories) {
+      try { await writeDraft(s, { skipNavigate: true }); ok++; }
+      catch { fail++; }
+      setBulkProgress((p) => p ? { ...p, done: p.done + 1 } : p);
+    }
+    setBulkProgress(null);
+    setSelected(new Set());
+    setBulkPreview(false);
+    toast.success(`Created ${ok} draft${ok === 1 ? "" : "s"}${fail ? ` · ${fail} failed` : ""}`);
+    navigate("/newsroom/drafts");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -178,6 +210,31 @@ export default function Discover() {
           ))}
         </div>
 
+        {filtered.length > 0 && (
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap bg-muted/40 border border-border rounded px-3 py-2">
+            <button onClick={selectAllVisible} className="text-xs flex items-center gap-1.5 text-ink-mid hover:text-foreground">
+              {filtered.every((s) => selected.has(s.id)) ? <CheckSquare size={14} /> : <Square size={14} />}
+              {selected.size > 0 ? `${selected.size} selected` : "Select all visible"}
+            </button>
+            {selected.size > 0 && (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setBulkPreview(true)} className="text-xs px-3 py-1.5 rounded bg-foreground text-background flex items-center gap-1.5">
+                  <Eye size={12} /> Preview {selected.size}
+                </button>
+                <button
+                  onClick={bulkDraft}
+                  disabled={!!bulkProgress}
+                  className="text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Sparkles size={12} />
+                  {bulkProgress ? `Drafting ${bulkProgress.done}/${bulkProgress.total}…` : `Draft ${selected.size} selected`}
+                </button>
+                <button onClick={() => setSelected(new Set())} className="text-xs text-ink-light hover:text-destructive px-2">Clear</button>
+              </div>
+            )}
+          </div>
+        )}
+
         {filtered.length === 0 ? (
           <div className="text-center py-16 text-ink-light">
             <p className="mb-3">No leads yet.</p>
@@ -186,7 +243,10 @@ export default function Discover() {
         ) : (
           <div className="space-y-3">
             {filtered.map((s) => (
-              <article key={s.id} className="bg-card border border-border rounded shadow-card p-5 flex gap-4 animate-fade-in-up">
+              <article key={s.id} className={`bg-card border rounded shadow-card p-5 flex gap-4 animate-fade-in-up ${selected.has(s.id) ? "border-primary" : "border-border"}`}>
+                <label className="flex items-start pt-1 cursor-pointer">
+                  <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} className="mt-1" />
+                </label>
                 {s.image_url && (
                   <img src={s.image_url} alt="" className="w-32 h-24 object-cover rounded flex-shrink-0 hidden sm:block" onError={(e) => (e.currentTarget.style.display = "none")} />
                 )}
@@ -282,6 +342,49 @@ export default function Discover() {
                   <ExternalLink size={12} /> Open source
                 </a>
                 <button onClick={() => { skip(preview.id); setPreview(null); }} className="text-sm text-ink-light hover:text-destructive px-3 py-2">Skip</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bulkPreview && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setBulkPreview(false)}>
+          <div className="bg-background rounded shadow-card max-w-3xl w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 p-5 border-b border-border sticky top-0 bg-background">
+              <div>
+                <div className="label-eyebrow text-primary mb-1">Bulk preview</div>
+                <h2 className="font-display text-xl">{selectedStories.length} stories selected</h2>
+                <p className="text-xs text-ink-light mt-1">Review highlights, then create drafts for all in one click.</p>
+              </div>
+              <button onClick={() => setBulkPreview(false)} className="text-ink-light hover:text-foreground"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              {selectedStories.map((s) => (
+                <div key={s.id} className="border border-border rounded p-4">
+                  <div className="flex items-center gap-2 mb-1 text-[11px]">
+                    <span className="font-mono-amaica text-primary uppercase tracking-wider">{s.source}</span>
+                    {s.region === "western_kenya" && <span className="bg-accent text-accent-foreground px-1.5 py-0.5 rounded-sm">Western KE</span>}
+                  </div>
+                  <h3 className="font-display text-base leading-snug mb-1">{s.title}</h3>
+                  {s.preview_summary && <p className="text-xs text-ink-mid mb-2 line-clamp-3">{s.preview_summary}</p>}
+                  {s.highlights && s.highlights.length > 0 && (
+                    <ul className="text-xs space-y-1 mt-2">
+                      {s.highlights.slice(0, 3).map((h, i) => <li key={i} className="border-l-2 border-primary pl-2 text-ink-mid">{h}</li>)}
+                    </ul>
+                  )}
+                </div>
+              ))}
+              <div className="flex items-center gap-2 pt-2 border-t border-border sticky bottom-0 bg-background py-3">
+                <button
+                  onClick={bulkDraft}
+                  disabled={!!bulkProgress}
+                  className="bg-primary text-primary-foreground px-4 py-2 rounded text-sm font-medium hover:bg-primary-mid flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Sparkles size={14} />
+                  {bulkProgress ? `Drafting ${bulkProgress.done}/${bulkProgress.total}…` : `Create ${selectedStories.length} drafts`}
+                </button>
+                <button onClick={() => setBulkPreview(false)} className="text-sm text-ink-light hover:text-foreground px-3 py-2">Cancel</button>
               </div>
             </div>
           </div>

@@ -65,6 +65,7 @@ export type Database = {
       discovered_stories: {
         Row: {
           author: string | null
+          canonical_url: string | null
           category: string | null
           created_at: string
           dedupe_hash: string | null
@@ -73,6 +74,7 @@ export type Database = {
           highlights: Json | null
           id: string
           image_url: string | null
+          normalized_title: string | null
           preview_summary: string | null
           published_at: string | null
           raw_content: string | null
@@ -85,6 +87,7 @@ export type Database = {
         }
         Insert: {
           author?: string | null
+          canonical_url?: string | null
           category?: string | null
           created_at?: string
           dedupe_hash?: string | null
@@ -93,6 +96,7 @@ export type Database = {
           highlights?: Json | null
           id?: string
           image_url?: string | null
+          normalized_title?: string | null
           preview_summary?: string | null
           published_at?: string | null
           raw_content?: string | null
@@ -105,6 +109,7 @@ export type Database = {
         }
         Update: {
           author?: string | null
+          canonical_url?: string | null
           category?: string | null
           created_at?: string
           dedupe_hash?: string | null
@@ -113,6 +118,7 @@ export type Database = {
           highlights?: Json | null
           id?: string
           image_url?: string | null
+          normalized_title?: string | null
           preview_summary?: string | null
           published_at?: string | null
           raw_content?: string | null
@@ -144,12 +150,14 @@ export type Database = {
           last_item_count: number
           last_status: string | null
           name: string
+          priority: number
           query: string | null
           total_accepted: number
           total_duplicates: number
           total_rejected: number
           updated_at: string
           url: string | null
+          weight: number
         }
         Insert: {
           created_at?: string
@@ -161,12 +169,14 @@ export type Database = {
           last_item_count?: number
           last_status?: string | null
           name: string
+          priority?: number
           query?: string | null
           total_accepted?: number
           total_duplicates?: number
           total_rejected?: number
           updated_at?: string
           url?: string | null
+          weight?: number
         }
         Update: {
           created_at?: string
@@ -178,12 +188,14 @@ export type Database = {
           last_item_count?: number
           last_status?: string | null
           name?: string
+          priority?: number
           query?: string | null
           total_accepted?: number
           total_duplicates?: number
           total_rejected?: number
           updated_at?: string
           url?: string | null
+          weight?: number
         }
         Relationships: []
       }
