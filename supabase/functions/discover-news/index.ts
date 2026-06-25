@@ -131,6 +131,23 @@ function normalizeTitle(t: string): string {
 function hostOf(u: string): string {
   try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; }
 }
+function canonicalize(u: string): string | null {
+  if (!u) return null;
+  try {
+    const url = new URL(u);
+    url.hash = "";
+    const drop = ["utm_source","utm_medium","utm_campaign","utm_term","utm_content","fbclid","gclid","mc_cid","mc_eid","ref","ref_src","igshid"];
+    for (const k of drop) url.searchParams.delete(k);
+    url.hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+    let path = url.pathname.replace(/\/+$/, "") || "/";
+    url.pathname = path;
+    return url.toString().toLowerCase();
+  } catch { return null; }
+}
+function titleKey(t: string): string {
+  // tighter key for near-duplicate title checks
+  return normalizeTitle(t).split(" ").filter((w) => w.length > 2).slice(0, 8).join(" ");
+}
 async function sha1(s: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(s));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -203,7 +220,8 @@ Deno.serve(async (req) => {
   try {
     // Load enabled feeds & queries
     const { data: feeds, error: fErr } = await supabase
-      .from("discovery_feeds").select("*").eq("enabled", true);
+      .from("discovery_feeds").select("*").eq("enabled", true)
+      .order("priority", { ascending: false }).order("name");
     if (fErr) throw fErr;
     const rssFeeds = (feeds || []).filter((f) => f.kind === "rss" && f.url);
     const queryFeeds = (feeds || []).filter((f) => f.kind === "query" && f.query);
@@ -238,6 +256,23 @@ Deno.serve(async (req) => {
 
     let fetchedCount = 0, insertedCount = 0, duplicateCount = 0, rejectedCount = 0, filteredCount = 0;
     const seenHash = new Set<string>();
+    const seenCanonical = new Set<string>();
+    const seenTitleKey = new Set<string>();
+
+    // Pre-load recent normalized titles + canonical urls (last 7 days) for cross-run dedupe
+    const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+    const { data: recentRows } = await supabase
+      .from("discovered_stories")
+      .select("normalized_title, canonical_url")
+      .gte("created_at", weekAgo)
+      .limit(5000);
+    for (const r of (recentRows || []) as Array<{ normalized_title: string | null; canonical_url: string | null }>) {
+      if (r.normalized_title) seenTitleKey.add(r.normalized_title);
+      if (r.canonical_url) seenCanonical.add(r.canonical_url);
+    }
+
+    // Sort items inside each feed group by feed weight (higher weight processed first)
+    allResults.sort((a, b) => (Number(b.feed.weight ?? 1) - Number(a.feed.weight ?? 1)));
 
     for (const r of allResults) {
       const stats = { feed_id: r.feed.id as string, name: r.feed.name as string, fetched: r.items.length, accepted: 0, rejected: 0, duplicates: 0 };
@@ -260,16 +295,27 @@ Deno.serve(async (req) => {
         if (politicsBlock.test(blob)) reason = "politics_or_hard_news";
         else if (!(ent.test(blob) || /entertainment|sde|buzz|pulse|mpasho|ghafla|capital/i.test(item.source))) reason = "non_entertainment";
 
+        const canonical = canonicalize(item.source_url);
+        const tkey = titleKey(item.title);
         const hash = await sha1(`${normalizeTitle(item.title)}|${hostOf(item.source_url)}`);
-        if (seenHash.has(hash)) {
+
+        // multi-signal dedupe: legacy hash OR canonical URL OR title-key match
+        if (
+          seenHash.has(hash) ||
+          (canonical && seenCanonical.has(canonical)) ||
+          (tkey && seenTitleKey.has(tkey))
+        ) {
           stats.duplicates++; duplicateCount++; continue;
         }
         seenHash.add(hash);
+        if (canonical) seenCanonical.add(canonical);
+        if (tkey) seenTitleKey.add(tkey);
 
         if (reason) {
           // Record rejection (best-effort) — still try to dedup-insert so analytics has data
           const { error: insErr } = await supabase.from("discovered_stories").insert({
-            ...item, dedupe_hash: hash, status: "rejected", rejection_reason: reason,
+            ...item, dedupe_hash: hash, canonical_url: canonical, normalized_title: tkey,
+            status: "rejected", rejection_reason: reason,
             highlights: extractHighlights(item.excerpt),
           });
           if (!insErr) { stats.rejected++; rejectedCount++; }
@@ -278,7 +324,8 @@ Deno.serve(async (req) => {
         }
 
         const { error: insErr } = await supabase.from("discovered_stories").insert({
-          ...item, dedupe_hash: hash, status: "new",
+          ...item, dedupe_hash: hash, canonical_url: canonical, normalized_title: tkey,
+          status: "new",
           highlights: extractHighlights(item.excerpt),
           preview_summary: item.excerpt?.slice(0, 280) || null,
         });
