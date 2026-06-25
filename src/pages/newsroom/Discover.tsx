@@ -210,6 +210,31 @@ export default function Discover() {
           ))}
         </div>
 
+        {filtered.length > 0 && (
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap bg-muted/40 border border-border rounded px-3 py-2">
+            <button onClick={selectAllVisible} className="text-xs flex items-center gap-1.5 text-ink-mid hover:text-foreground">
+              {filtered.every((s) => selected.has(s.id)) ? <CheckSquare size={14} /> : <Square size={14} />}
+              {selected.size > 0 ? `${selected.size} selected` : "Select all visible"}
+            </button>
+            {selected.size > 0 && (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setBulkPreview(true)} className="text-xs px-3 py-1.5 rounded bg-foreground text-background flex items-center gap-1.5">
+                  <Eye size={12} /> Preview {selected.size}
+                </button>
+                <button
+                  onClick={bulkDraft}
+                  disabled={!!bulkProgress}
+                  className="text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Sparkles size={12} />
+                  {bulkProgress ? `Drafting ${bulkProgress.done}/${bulkProgress.total}…` : `Draft ${selected.size} selected`}
+                </button>
+                <button onClick={() => setSelected(new Set())} className="text-xs text-ink-light hover:text-destructive px-2">Clear</button>
+              </div>
+            )}
+          </div>
+        )}
+
         {filtered.length === 0 ? (
           <div className="text-center py-16 text-ink-light">
             <p className="mb-3">No leads yet.</p>
@@ -218,7 +243,10 @@ export default function Discover() {
         ) : (
           <div className="space-y-3">
             {filtered.map((s) => (
-              <article key={s.id} className="bg-card border border-border rounded shadow-card p-5 flex gap-4 animate-fade-in-up">
+              <article key={s.id} className={`bg-card border rounded shadow-card p-5 flex gap-4 animate-fade-in-up ${selected.has(s.id) ? "border-primary" : "border-border"}`}>
+                <label className="flex items-start pt-1 cursor-pointer">
+                  <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} className="mt-1" />
+                </label>
                 {s.image_url && (
                   <img src={s.image_url} alt="" className="w-32 h-24 object-cover rounded flex-shrink-0 hidden sm:block" onError={(e) => (e.currentTarget.style.display = "none")} />
                 )}
