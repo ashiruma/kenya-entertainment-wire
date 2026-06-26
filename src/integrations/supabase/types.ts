@@ -281,6 +281,7 @@ export type Database = {
           headline: string
           hero_image_url: string | null
           id: string
+          idempotency_key: string | null
           instagram_post: string | null
           lede: string | null
           published_at: string | null
@@ -309,6 +310,7 @@ export type Database = {
           headline: string
           hero_image_url?: string | null
           id?: string
+          idempotency_key?: string | null
           instagram_post?: string | null
           lede?: string | null
           published_at?: string | null
@@ -337,6 +339,7 @@ export type Database = {
           headline?: string
           hero_image_url?: string | null
           id?: string
+          idempotency_key?: string | null
           instagram_post?: string | null
           lede?: string | null
           published_at?: string | null
@@ -587,6 +590,57 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      write_article_attempts: {
+        Row: {
+          article: Json | null
+          attempt: number
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          http_code: number | null
+          id: string
+          idempotency_key: string
+          next_retry_at: string | null
+          retry_after_ms: number | null
+          run_id: string | null
+          status: string
+          story_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          article?: Json | null
+          attempt?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          http_code?: number | null
+          id?: string
+          idempotency_key: string
+          next_retry_at?: string | null
+          retry_after_ms?: number | null
+          run_id?: string | null
+          status?: string
+          story_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          article?: Json | null
+          attempt?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          http_code?: number | null
+          id?: string
+          idempotency_key?: string
+          next_retry_at?: string | null
+          retry_after_ms?: number | null
+          run_id?: string | null
+          status?: string
+          story_id?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
