@@ -33,6 +33,14 @@ export default function Discover() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkPreview, setBulkPreview] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  type RetryStatus = {
+    state: "queued" | "writing" | "retrying" | "done" | "failed";
+    attempts?: number;
+    nextRetryAt?: string | null;
+    finalStatus?: number | null;
+    finalError?: string | null;
+  };
+  const [retryStatus, setRetryStatus] = useState<Record<string, RetryStatus>>({});
 
   const load = async () => {
     let q = supabase
@@ -70,6 +78,8 @@ export default function Discover() {
 
   const writeDraft = async (story: Story, opts?: { skipNavigate?: boolean }) => {
     setWritingId(story.id);
+    const idempotency_key = `wa:${story.id}`;
+    setRetryStatus((prev) => ({ ...prev, [story.id]: { state: "writing", attempts: 0 } }));
     try {
       // Try deep-scrape; on Firecrawl 403/402/etc fall back to RSS title + excerpt
       let content = story.excerpt || "";
@@ -111,11 +121,31 @@ export default function Discover() {
           source_name: story.source,
           template_type: "breaking",
           region: story.region,
+          idempotency_key,
+          story_id: story.id,
         },
       });
-      if (error) throw error;
+      // Capture retry telemetry whether or not the call succeeded
+      const retry = (data as { retry?: { attempts?: number; final_status?: number | null; final_error?: string | null } } | null)?.retry;
+      if (error || !data?.article) {
+        setRetryStatus((prev) => ({
+          ...prev,
+          [story.id]: {
+            state: "failed",
+            attempts: retry?.attempts,
+            finalStatus: retry?.final_status ?? null,
+            finalError: retry?.final_error ?? (error?.message || "Writing failed"),
+          },
+        }));
+        throw error || new Error(retry?.final_error || "Writing failed");
+      }
       const a = data.article;
-      const { data: draft, error: dErr } = await supabase.from("drafts").insert({
+      // Idempotent insert: if a draft already exists for this key, reuse it instead of duplicating.
+      const { data: existing } = await supabase.from("drafts")
+        .select("id").eq("idempotency_key", idempotency_key).maybeSingle();
+      let draft = existing as { id: string } | null;
+      if (!draft) {
+        const { data: inserted, error: dErr } = await supabase.from("drafts").insert({
         author_id: user.id,
         source_story_id: story.id,
         template_type: a.template_used,
@@ -131,19 +161,42 @@ export default function Discover() {
         instagram_post: a.instagram_post,
         facebook_post: a.facebook_post,
         status: "draft",
+        idempotency_key,
         sources: (a.sources && a.sources.length > 0)
           ? a.sources
           : [{ url: story.source_url, title: story.source, notes: story.excerpt ? [story.excerpt.slice(0, 300)] : [] }],
-      }).select().single();
-      if (dErr) throw dErr;
+        }).select().single();
+        if (dErr) {
+          // Conflict on idempotency_key → fetch existing draft
+          if ((dErr as { code?: string }).code === "23505") {
+            const { data: dup } = await supabase.from("drafts")
+              .select("id").eq("idempotency_key", idempotency_key).maybeSingle();
+            if (!dup) throw dErr;
+            draft = dup as { id: string };
+          } else {
+            throw dErr;
+          }
+        } else {
+          draft = inserted as { id: string };
+        }
+      }
       await supabase.from("discovered_stories").update({ status: "used" }).eq("id", story.id);
       setStories((prev) => prev.filter((x) => x.id !== story.id));
+      setRetryStatus((prev) => ({
+        ...prev,
+        [story.id]: { state: "done", attempts: retry?.attempts ?? 1 },
+      }));
       if (!opts?.skipNavigate) {
         toast.success("Draft created");
-        navigate(`/newsroom/draft/${draft.id}`);
+        navigate(`/newsroom/draft/${draft!.id}`);
       }
     } catch (e) {
       if (!opts?.skipNavigate) toast.error(e instanceof Error ? e.message : "Writing failed");
+      setRetryStatus((prev) => {
+        const cur = prev[story.id];
+        if (cur?.state === "failed") return prev;
+        return { ...prev, [story.id]: { state: "failed", finalError: e instanceof Error ? e.message : "Writing failed" } };
+      });
       throw e;
     } finally {
       setWritingId(null);
