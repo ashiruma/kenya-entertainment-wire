@@ -1,3 +1,6 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { fetchWithBackoff } from "../_shared/backoff.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -67,9 +70,46 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const { source_title, source_excerpt, source_content, source_name, template_type, region } = await req.json();
+    const body = await req.json();
+    const {
+      source_title, source_excerpt, source_content, source_name, template_type, region,
+      idempotency_key: clientKey, story_id, run_id,
+    } = body;
 
     if (!source_title) throw new Error("Missing source_title");
+
+    // Idempotency key: client-provided, else derive from story_id, else hash of source fields.
+    const idempotency_key: string =
+      (typeof clientKey === "string" && clientKey.trim()) ||
+      (story_id ? `story:${story_id}` : `src:${(source_title || "").slice(0, 120)}:${(source_name || "")}`);
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    // Cache hit: a prior successful attempt for this key — return its article without re-calling AI.
+    const { data: priorSuccess } = await supabase
+      .from("write_article_attempts")
+      .select("article, attempt")
+      .eq("idempotency_key", idempotency_key)
+      .eq("status", "success")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (priorSuccess?.article) {
+      return new Response(JSON.stringify({
+        success: true, article: priorSuccess.article, idempotency_key,
+        retry: { attempts: priorSuccess.attempt ?? 1, cached: true },
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Determine next attempt number for this key
+    const { count: priorCount } = await supabase
+      .from("write_article_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("idempotency_key", idempotency_key);
+    const startAttempt = (priorCount ?? 0) + 1;
 
     const userPrompt = `Rewrite this entertainment news lead in Amaica Media style.
 
@@ -138,38 +178,64 @@ Return STRICT JSON only via the provided tool. The body MUST include the five ma
         tool_choice: { type: "function", function: { name: "publish_article" } },
     });
 
-    let aiRes: Response | null = null;
-    const maxAttempts = 4;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    let lastAttemptNum = startAttempt;
+    const result = await fetchWithBackoff(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
         body: requestBody,
+      },
+      {
+        maxAttempts: 4, baseMs: 1000, capMs: 8000,
+        onRetry: async ({ attempt, status, delayMs, error }) => {
+          const n = startAttempt + (attempt - 1);
+          lastAttemptNum = n + 1;
+          await supabase.from("write_article_attempts").insert({
+            idempotency_key, run_id: run_id ?? null, story_id: story_id ?? null,
+            attempt: n,
+            status: status === 429 ? "rate_limited" : "error",
+            http_code: status || null,
+            error: error ?? null,
+            retry_after_ms: delayMs,
+            next_retry_at: new Date(Date.now() + delayMs).toISOString(),
+            finished_at: new Date().toISOString(),
+          });
+        },
+      },
+    );
+    const aiRes = result.response;
+    if (!aiRes) {
+      await supabase.from("write_article_attempts").insert({
+        idempotency_key, run_id: run_id ?? null, story_id: story_id ?? null,
+        attempt: lastAttemptNum, status: "error",
+        http_code: result.lastStatus, error: result.lastError ?? "no response",
+        finished_at: new Date().toISOString(),
       });
-      if (aiRes.status !== 429 || attempt === maxAttempts) break;
-      const retryAfter = Number(aiRes.headers.get("retry-after")) || 0;
-      const delayMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(8000, 1000 * 2 ** (attempt - 1));
-      console.log(`write-article: 429 on attempt ${attempt}, retrying in ${delayMs}ms`);
-      await new Promise((r) => setTimeout(r, delayMs));
+      return new Response(JSON.stringify({
+        success: false, error: result.lastError ?? "AI gateway unreachable",
+        idempotency_key, retry: { attempts: result.attempts, final_status: result.lastStatus, final_error: result.lastError },
+      }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (!aiRes) throw new Error("No AI response");
 
     if (!aiRes.ok) {
-      if (aiRes.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit reached. Please wait a moment and retry." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (aiRes.status === 402) {
-        return new Response(JSON.stringify({ error: "Lovable AI credits required. Add credits in Workspace Settings → Usage." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await aiRes.text();
-      throw new Error(`AI gateway ${aiRes.status}: ${t}`);
+      const errText = await aiRes.text().catch(() => "");
+      await supabase.from("write_article_attempts").insert({
+        idempotency_key, run_id: run_id ?? null, story_id: story_id ?? null,
+        attempt: startAttempt + result.attempts - 1,
+        status: aiRes.status === 429 ? "rate_limited" : "error",
+        http_code: aiRes.status, error: errText.slice(0, 1000),
+        finished_at: new Date().toISOString(),
+      });
+      const message = aiRes.status === 429
+        ? "Rate limit reached. Please wait a moment and retry."
+        : aiRes.status === 402
+          ? "Lovable AI credits required. Add credits in Workspace Settings → Usage."
+          : `AI gateway ${aiRes.status}`;
+      return new Response(JSON.stringify({
+        success: false, error: message, idempotency_key,
+        retry: { attempts: result.attempts, final_status: aiRes.status, final_error: message },
+      }), { status: aiRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const aiData = await aiRes.json();
@@ -178,7 +244,17 @@ Return STRICT JSON only via the provided tool. The body MUST include the five ma
 
     const article = JSON.parse(toolCall.function.arguments);
 
-    return new Response(JSON.stringify({ success: true, article }), {
+    await supabase.from("write_article_attempts").insert({
+      idempotency_key, run_id: run_id ?? null, story_id: story_id ?? null,
+      attempt: startAttempt + result.attempts - 1,
+      status: "success", http_code: 200, article,
+      finished_at: new Date().toISOString(),
+    });
+
+    return new Response(JSON.stringify({
+      success: true, article, idempotency_key,
+      retry: { attempts: result.attempts, cached: false },
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
