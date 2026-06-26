@@ -1,3 +1,5 @@
+import { fetchWithBackoff } from "../_shared/backoff.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -86,10 +88,7 @@ RULES:
 
 Return STRICT JSON via the tool.`;
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const reqBody = JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: "You are a senior entertainment editor doing surgical rewrites. Do not invent facts. Output only what the tool schema asks for." },
@@ -147,8 +146,17 @@ Return STRICT JSON via the tool.`;
           },
         }],
         tool_choice: { type: "function", function: { name: "apply_fixes" } },
-      }),
     });
+    const { response: aiRes } = await fetchWithBackoff(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+        body: reqBody,
+      },
+      { maxAttempts: 4, baseMs: 1000, capMs: 8000 },
+    );
+    if (!aiRes) throw new Error("AI gateway unreachable");
 
     if (!aiRes.ok) {
       if (aiRes.status === 429) return new Response(JSON.stringify({ error: "Rate limit reached." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
