@@ -418,6 +418,21 @@ export default function Discover() {
                   <div className="flex items-center gap-2 mb-1 text-[11px]">
                     <span className="font-mono-amaica text-primary uppercase tracking-wider">{s.source}</span>
                     {s.region === "western_kenya" && <span className="bg-accent text-accent-foreground px-1.5 py-0.5 rounded-sm">Western KE</span>}
+                    {retryStatus[s.id] && (() => {
+                      const r = retryStatus[s.id];
+                      const cls = r.state === "done" ? "bg-green-100 text-green-800"
+                        : r.state === "failed" ? "bg-red-100 text-red-800"
+                        : r.state === "retrying" ? "bg-amber-100 text-amber-800"
+                        : "bg-gray-100 text-gray-800";
+                      const label = r.state === "writing" ? "Writing…"
+                        : r.state === "retrying" ? `Retrying (attempt ${r.attempts ?? "?"})${r.nextRetryAt ? ` · next ${new Date(r.nextRetryAt).toLocaleTimeString()}` : ""}`
+                        : r.state === "done" ? `Drafted${r.attempts && r.attempts > 1 ? ` · ${r.attempts} attempts` : ""}`
+                        : r.state === "failed" ? `Failed${r.finalStatus ? ` ${r.finalStatus}` : ""}${r.attempts ? ` · ${r.attempts} attempts` : ""}`
+                        : "Queued";
+                      return (
+                        <span className={`px-1.5 py-0.5 rounded-sm ${cls}`} title={r.finalError ?? ""}>{label}</span>
+                      );
+                    })()}
                   </div>
                   <h3 className="font-display text-base leading-snug mb-1">{s.title}</h3>
                   {s.preview_summary && <p className="text-xs text-ink-mid mb-2 line-clamp-3">{s.preview_summary}</p>}
@@ -425,6 +440,9 @@ export default function Discover() {
                     <ul className="text-xs space-y-1 mt-2">
                       {s.highlights.slice(0, 3).map((h, i) => <li key={i} className="border-l-2 border-primary pl-2 text-ink-mid">{h}</li>)}
                     </ul>
+                  )}
+                  {retryStatus[s.id]?.finalError && (
+                    <div className="mt-2 text-[11px] text-destructive">{retryStatus[s.id].finalError}</div>
                   )}
                 </div>
               ))}
