@@ -59,6 +59,38 @@ export default function Discover() {
     if (user) load();
   }, [user]);
 
+  // Live-poll write_article_attempts for the currently-writing story so the bulk
+  // preview modal can show attempt count + next retry time as they happen.
+  useEffect(() => {
+    if (!writingId) return;
+    const key = `wa:${writingId}`;
+    const t = setInterval(async () => {
+      const { data } = await supabase
+        .from("write_article_attempts")
+        .select("attempt,status,http_code,error,next_retry_at,finished_at")
+        .eq("idempotency_key", key)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!data) return;
+      setRetryStatus((prev) => {
+        const cur = prev[writingId];
+        if (cur?.state === "done" || cur?.state === "failed") return prev;
+        return {
+          ...prev,
+          [writingId]: {
+            state: data.status === "rate_limited" || (data.status === "error" && !data.finished_at) ? "retrying" : (cur?.state ?? "writing"),
+            attempts: data.attempt,
+            nextRetryAt: data.next_retry_at,
+            finalStatus: data.http_code,
+            finalError: data.error,
+          },
+        };
+      });
+    }, 1500);
+    return () => clearInterval(t);
+  }, [writingId]);
+
   if (loading) return <div className="min-h-screen bg-background" />;
   if (!user) return <Navigate to="/auth" replace />;
 
@@ -222,6 +254,11 @@ export default function Discover() {
   const bulkDraft = async () => {
     if (selectedStories.length === 0) return;
     setBulkProgress({ done: 0, total: selectedStories.length });
+    setRetryStatus((prev) => {
+      const next = { ...prev };
+      for (const s of selectedStories) next[s.id] = { state: "queued" };
+      return next;
+    });
     let ok = 0, fail = 0;
     for (const s of selectedStories) {
       try { await writeDraft(s, { skipNavigate: true }); ok++; }
@@ -230,9 +267,10 @@ export default function Discover() {
     }
     setBulkProgress(null);
     setSelected(new Set());
-    setBulkPreview(false);
+    // Keep the preview open if anything failed so the editor can see the reasons.
+    if (fail === 0) setBulkPreview(false);
     toast.success(`Created ${ok} draft${ok === 1 ? "" : "s"}${fail ? ` · ${fail} failed` : ""}`);
-    navigate("/newsroom/drafts");
+    if (fail === 0) navigate("/newsroom/drafts");
   };
 
   return (
