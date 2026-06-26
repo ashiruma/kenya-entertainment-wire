@@ -93,13 +93,7 @@ Also produce social posts:
 
 Return STRICT JSON only via the provided tool. The body MUST include the five mandatory headings (## Background, ## Key Details, ## Quotes, ## Why it matters, ## Outlook) in that exact order. Include sources[] with the wire URL and extracted notes used.`;
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const requestBody = JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: STYLE_GUIDE },
@@ -142,8 +136,26 @@ Return STRICT JSON only via the provided tool. The body MUST include the five ma
           },
         }],
         tool_choice: { type: "function", function: { name: "publish_article" } },
-      }),
     });
+
+    let aiRes: Response | null = null;
+    const maxAttempts = 4;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: requestBody,
+      });
+      if (aiRes.status !== 429 || attempt === maxAttempts) break;
+      const retryAfter = Number(aiRes.headers.get("retry-after")) || 0;
+      const delayMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(8000, 1000 * 2 ** (attempt - 1));
+      console.log(`write-article: 429 on attempt ${attempt}, retrying in ${delayMs}ms`);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+    if (!aiRes) throw new Error("No AI response");
 
     if (!aiRes.ok) {
       if (aiRes.status === 429) {
