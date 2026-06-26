@@ -19,6 +19,11 @@ type Run = {
 };
 type Settings = { enabled: boolean; interval_minutes: number };
 type Story = { region: string | null; status: string; rejection_reason: string | null; feed_id: string | null };
+type Attempt = {
+  id: string; idempotency_key: string; run_id: string | null; story_id: string | null;
+  attempt: number; status: string; http_code: number | null; error: string | null;
+  next_retry_at: string | null; created_at: string; finished_at: string | null;
+};
 
 export default function DiscoveryAdmin() {
   const { user, loading, isEditor } = useAuth();
@@ -26,6 +31,7 @@ export default function DiscoveryAdmin() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [settings, setSettings] = useState<Settings>({ enabled: false, interval_minutes: 60 });
   const [stories, setStories] = useState<Story[]>([]);
+  const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [busy, setBusy] = useState(false);
   const [newKind, setNewKind] = useState<"rss" | "query">("rss");
   const [newName, setNewName] = useState("");
@@ -33,16 +39,18 @@ export default function DiscoveryAdmin() {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
   const load = async () => {
-    const [f, r, s, st] = await Promise.all([
+    const [f, r, s, st, at] = await Promise.all([
       supabase.from("discovery_feeds").select("*").order("kind").order("name"),
       supabase.from("discovery_runs").select("*").order("started_at", { ascending: false }).limit(20),
       supabase.from("discovery_settings").select("*").maybeSingle(),
       supabase.from("discovered_stories").select("region,status,rejection_reason,feed_id").limit(2000),
+      supabase.from("write_article_attempts").select("*").order("created_at", { ascending: false }).limit(500),
     ]);
     if (f.data) setFeeds(f.data as Feed[]);
     if (r.data) setRuns(r.data as unknown as Run[]);
     if (s.data) setSettings({ enabled: s.data.enabled, interval_minutes: s.data.interval_minutes });
     if (st.data) setStories(st.data as Story[]);
+    if (at.data) setAttempts(at.data as Attempt[]);
   };
   useEffect(() => { if (user && isEditor) load(); }, [user, isEditor]);
 
@@ -85,6 +93,43 @@ export default function DiscoveryAdmin() {
     }
     return { byFeed, byRegion, byReason };
   }, [stories]);
+
+  // Group write-article attempts by idempotency_key (per-story) and bucket by run_id.
+  const writeAnalytics = useMemo(() => {
+    type Grouped = {
+      key: string; story_id: string | null; run_id: string | null;
+      attempts: number; rate_limited: number; errors: number; succeeded: boolean;
+      lastStatus: string; lastError: string | null; lastHttp: number | null; lastAt: string;
+    };
+    const byKey = new Map<string, Grouped>();
+    for (const a of attempts) {
+      const g = byKey.get(a.idempotency_key) || {
+        key: a.idempotency_key, story_id: a.story_id, run_id: a.run_id,
+        attempts: 0, rate_limited: 0, errors: 0, succeeded: false,
+        lastStatus: a.status, lastError: a.error, lastHttp: a.http_code, lastAt: a.created_at,
+      };
+      g.attempts = Math.max(g.attempts, a.attempt);
+      if (a.status === "rate_limited") g.rate_limited++;
+      if (a.status === "error") g.errors++;
+      if (a.status === "success") g.succeeded = true;
+      if (new Date(a.created_at) > new Date(g.lastAt)) {
+        g.lastStatus = a.status; g.lastError = a.error; g.lastHttp = a.http_code; g.lastAt = a.created_at;
+      }
+      g.run_id = g.run_id || a.run_id;
+      g.story_id = g.story_id || a.story_id;
+      byKey.set(a.idempotency_key, g);
+    }
+    const all = [...byKey.values()];
+    const problematic = all.filter((g) => !g.succeeded || g.rate_limited > 0 || g.errors > 0)
+      .sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+    const totals = {
+      stories: all.length,
+      rate_limited: all.reduce((n, g) => n + g.rate_limited, 0),
+      errored: all.filter((g) => g.errors > 0).length,
+      retried: all.filter((g) => g.attempts > 1).length,
+    };
+    return { problematic, totals };
+  }, [attempts]);
 
   if (loading) return <div className="min-h-screen bg-background" />;
   if (!user) return <Navigate to="/auth" replace />;
@@ -287,6 +332,48 @@ export default function DiscoveryAdmin() {
               </details>
             ))}
           </div>
+        </section>
+
+        {/* Write-article errors */}
+        <section className="bg-card border border-border rounded p-5">
+          <h2 className="font-display text-lg mb-3">Write-article errors & retries</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
+            <div className="border border-border rounded p-3"><div className="label-eyebrow text-primary mb-1">Stories</div><strong>{writeAnalytics.totals.stories}</strong></div>
+            <div className="border border-border rounded p-3"><div className="label-eyebrow text-primary mb-1">Retried</div><strong>{writeAnalytics.totals.retried}</strong></div>
+            <div className="border border-border rounded p-3"><div className="label-eyebrow text-primary mb-1">429 hits</div><strong>{writeAnalytics.totals.rate_limited}</strong></div>
+            <div className="border border-border rounded p-3"><div className="label-eyebrow text-primary mb-1">With errors</div><strong>{writeAnalytics.totals.errored}</strong></div>
+          </div>
+          {writeAnalytics.problematic.length === 0 ? (
+            <div className="text-sm text-ink-light">No retries or errors recorded. 🎉</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase tracking-wider text-ink-light border-b border-border">
+                  <tr><th className="py-2">When</th><th>Run</th><th>Story</th><th>Attempts</th><th>429</th><th>Errors</th><th>Last status</th><th>Final error</th></tr>
+                </thead>
+                <tbody>
+                  {writeAnalytics.problematic.slice(0, 50).map((g) => (
+                    <tr key={g.key} className="border-b border-border/60">
+                      <td className="py-2 text-xs">{new Date(g.lastAt).toLocaleString()}</td>
+                      <td className="text-xs font-mono">{g.run_id ? g.run_id.slice(0, 8) : "—"}</td>
+                      <td className="text-xs font-mono" title={g.story_id ?? g.key}>{g.story_id ? g.story_id.slice(0, 8) : g.key.slice(0, 12)}</td>
+                      <td className="text-xs">{g.attempts}</td>
+                      <td className="text-xs">{g.rate_limited}</td>
+                      <td className="text-xs">{g.errors}</td>
+                      <td className="text-xs">
+                        {g.succeeded ? <span className="text-green-700">success</span> : (
+                          <span className={g.lastStatus === "rate_limited" ? "text-amber-700" : "text-destructive"}>
+                            {g.lastStatus}{g.lastHttp ? ` ${g.lastHttp}` : ""}
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-xs text-ink-mid max-w-[280px] truncate" title={g.lastError ?? ""}>{g.lastError ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       </main>
     </div>

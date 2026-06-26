@@ -33,6 +33,14 @@ export default function Discover() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkPreview, setBulkPreview] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  type RetryStatus = {
+    state: "queued" | "writing" | "retrying" | "done" | "failed";
+    attempts?: number;
+    nextRetryAt?: string | null;
+    finalStatus?: number | null;
+    finalError?: string | null;
+  };
+  const [retryStatus, setRetryStatus] = useState<Record<string, RetryStatus>>({});
 
   const load = async () => {
     let q = supabase
@@ -50,6 +58,38 @@ export default function Discover() {
   useEffect(() => {
     if (user) load();
   }, [user]);
+
+  // Live-poll write_article_attempts for the currently-writing story so the bulk
+  // preview modal can show attempt count + next retry time as they happen.
+  useEffect(() => {
+    if (!writingId) return;
+    const key = `wa:${writingId}`;
+    const t = setInterval(async () => {
+      const { data } = await supabase
+        .from("write_article_attempts")
+        .select("attempt,status,http_code,error,next_retry_at,finished_at")
+        .eq("idempotency_key", key)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!data) return;
+      setRetryStatus((prev) => {
+        const cur = prev[writingId];
+        if (cur?.state === "done" || cur?.state === "failed") return prev;
+        return {
+          ...prev,
+          [writingId]: {
+            state: data.status === "rate_limited" || (data.status === "error" && !data.finished_at) ? "retrying" : (cur?.state ?? "writing"),
+            attempts: data.attempt,
+            nextRetryAt: data.next_retry_at,
+            finalStatus: data.http_code,
+            finalError: data.error,
+          },
+        };
+      });
+    }, 1500);
+    return () => clearInterval(t);
+  }, [writingId]);
 
   if (loading) return <div className="min-h-screen bg-background" />;
   if (!user) return <Navigate to="/auth" replace />;
@@ -70,6 +110,8 @@ export default function Discover() {
 
   const writeDraft = async (story: Story, opts?: { skipNavigate?: boolean }) => {
     setWritingId(story.id);
+    const idempotency_key = `wa:${story.id}`;
+    setRetryStatus((prev) => ({ ...prev, [story.id]: { state: "writing", attempts: 0 } }));
     try {
       // Try deep-scrape; on Firecrawl 403/402/etc fall back to RSS title + excerpt
       let content = story.excerpt || "";
@@ -111,11 +153,31 @@ export default function Discover() {
           source_name: story.source,
           template_type: "breaking",
           region: story.region,
+          idempotency_key,
+          story_id: story.id,
         },
       });
-      if (error) throw error;
+      // Capture retry telemetry whether or not the call succeeded
+      const retry = (data as { retry?: { attempts?: number; final_status?: number | null; final_error?: string | null } } | null)?.retry;
+      if (error || !data?.article) {
+        setRetryStatus((prev) => ({
+          ...prev,
+          [story.id]: {
+            state: "failed",
+            attempts: retry?.attempts,
+            finalStatus: retry?.final_status ?? null,
+            finalError: retry?.final_error ?? (error?.message || "Writing failed"),
+          },
+        }));
+        throw error || new Error(retry?.final_error || "Writing failed");
+      }
       const a = data.article;
-      const { data: draft, error: dErr } = await supabase.from("drafts").insert({
+      // Idempotent insert: if a draft already exists for this key, reuse it instead of duplicating.
+      const { data: existing } = await supabase.from("drafts")
+        .select("id").eq("idempotency_key", idempotency_key).maybeSingle();
+      let draft = existing as { id: string } | null;
+      if (!draft) {
+        const { data: inserted, error: dErr } = await supabase.from("drafts").insert({
         author_id: user.id,
         source_story_id: story.id,
         template_type: a.template_used,
@@ -131,19 +193,42 @@ export default function Discover() {
         instagram_post: a.instagram_post,
         facebook_post: a.facebook_post,
         status: "draft",
+        idempotency_key,
         sources: (a.sources && a.sources.length > 0)
           ? a.sources
           : [{ url: story.source_url, title: story.source, notes: story.excerpt ? [story.excerpt.slice(0, 300)] : [] }],
-      }).select().single();
-      if (dErr) throw dErr;
+        }).select().single();
+        if (dErr) {
+          // Conflict on idempotency_key → fetch existing draft
+          if ((dErr as { code?: string }).code === "23505") {
+            const { data: dup } = await supabase.from("drafts")
+              .select("id").eq("idempotency_key", idempotency_key).maybeSingle();
+            if (!dup) throw dErr;
+            draft = dup as { id: string };
+          } else {
+            throw dErr;
+          }
+        } else {
+          draft = inserted as { id: string };
+        }
+      }
       await supabase.from("discovered_stories").update({ status: "used" }).eq("id", story.id);
       setStories((prev) => prev.filter((x) => x.id !== story.id));
+      setRetryStatus((prev) => ({
+        ...prev,
+        [story.id]: { state: "done", attempts: retry?.attempts ?? 1 },
+      }));
       if (!opts?.skipNavigate) {
         toast.success("Draft created");
-        navigate(`/newsroom/draft/${draft.id}`);
+        navigate(`/newsroom/draft/${draft!.id}`);
       }
     } catch (e) {
       if (!opts?.skipNavigate) toast.error(e instanceof Error ? e.message : "Writing failed");
+      setRetryStatus((prev) => {
+        const cur = prev[story.id];
+        if (cur?.state === "failed") return prev;
+        return { ...prev, [story.id]: { state: "failed", finalError: e instanceof Error ? e.message : "Writing failed" } };
+      });
       throw e;
     } finally {
       setWritingId(null);
@@ -169,6 +254,11 @@ export default function Discover() {
   const bulkDraft = async () => {
     if (selectedStories.length === 0) return;
     setBulkProgress({ done: 0, total: selectedStories.length });
+    setRetryStatus((prev) => {
+      const next = { ...prev };
+      for (const s of selectedStories) next[s.id] = { state: "queued" };
+      return next;
+    });
     let ok = 0, fail = 0;
     for (const s of selectedStories) {
       try { await writeDraft(s, { skipNavigate: true }); ok++; }
@@ -177,9 +267,10 @@ export default function Discover() {
     }
     setBulkProgress(null);
     setSelected(new Set());
-    setBulkPreview(false);
+    // Keep the preview open if anything failed so the editor can see the reasons.
+    if (fail === 0) setBulkPreview(false);
     toast.success(`Created ${ok} draft${ok === 1 ? "" : "s"}${fail ? ` · ${fail} failed` : ""}`);
-    navigate("/newsroom/drafts");
+    if (fail === 0) navigate("/newsroom/drafts");
   };
 
   return (
@@ -365,6 +456,21 @@ export default function Discover() {
                   <div className="flex items-center gap-2 mb-1 text-[11px]">
                     <span className="font-mono-amaica text-primary uppercase tracking-wider">{s.source}</span>
                     {s.region === "western_kenya" && <span className="bg-accent text-accent-foreground px-1.5 py-0.5 rounded-sm">Western KE</span>}
+                    {retryStatus[s.id] && (() => {
+                      const r = retryStatus[s.id];
+                      const cls = r.state === "done" ? "bg-green-100 text-green-800"
+                        : r.state === "failed" ? "bg-red-100 text-red-800"
+                        : r.state === "retrying" ? "bg-amber-100 text-amber-800"
+                        : "bg-gray-100 text-gray-800";
+                      const label = r.state === "writing" ? "Writing…"
+                        : r.state === "retrying" ? `Retrying (attempt ${r.attempts ?? "?"})${r.nextRetryAt ? ` · next ${new Date(r.nextRetryAt).toLocaleTimeString()}` : ""}`
+                        : r.state === "done" ? `Drafted${r.attempts && r.attempts > 1 ? ` · ${r.attempts} attempts` : ""}`
+                        : r.state === "failed" ? `Failed${r.finalStatus ? ` ${r.finalStatus}` : ""}${r.attempts ? ` · ${r.attempts} attempts` : ""}`
+                        : "Queued";
+                      return (
+                        <span className={`px-1.5 py-0.5 rounded-sm ${cls}`} title={r.finalError ?? ""}>{label}</span>
+                      );
+                    })()}
                   </div>
                   <h3 className="font-display text-base leading-snug mb-1">{s.title}</h3>
                   {s.preview_summary && <p className="text-xs text-ink-mid mb-2 line-clamp-3">{s.preview_summary}</p>}
@@ -372,6 +478,9 @@ export default function Discover() {
                     <ul className="text-xs space-y-1 mt-2">
                       {s.highlights.slice(0, 3).map((h, i) => <li key={i} className="border-l-2 border-primary pl-2 text-ink-mid">{h}</li>)}
                     </ul>
+                  )}
+                  {retryStatus[s.id]?.finalError && (
+                    <div className="mt-2 text-[11px] text-destructive">{retryStatus[s.id].finalError}</div>
                   )}
                 </div>
               ))}

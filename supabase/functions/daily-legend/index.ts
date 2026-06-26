@@ -29,7 +29,8 @@ Impact: ${legend.impact}
 
 Write a fresh tribute for today's "Our Legends" feature. Lead with their human impact, not just credits.`;
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const { fetchWithBackoff } = await import("../_shared/backoff.ts");
+  const { response: res } = await fetchWithBackoff("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -53,8 +54,8 @@ Write a fresh tribute for today's "Our Legends" feature. Lead with their human i
       }],
       tool_choice: { type: "function", function: { name: "publish_tribute" } },
     }),
-  });
-  if (!res.ok) {
+  }, { maxAttempts: 4, baseMs: 1000, capMs: 8000 });
+  if (!res || !res.ok) {
     console.error("AI error", res.status, await res.text().catch(() => ""));
     return null;
   }
