@@ -33,6 +33,9 @@ export default function Discover() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkPreview, setBulkPreview] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkStatusFilter, setBulkStatusFilter] = useState<"all" | "queued" | "writing" | "done" | "failed">("all");
+  const [bulkAttemptFilter, setBulkAttemptFilter] = useState<"all" | "1" | "2+" | "3+">("all");
+  const [bulkErrorFilter, setBulkErrorFilter] = useState<string>("all");
   type RetryStatus = {
     state: "queued" | "writing" | "retrying" | "done" | "failed";
     attempts?: number;
@@ -469,7 +472,80 @@ export default function Discover() {
               <button onClick={() => setBulkPreview(false)} className="text-ink-light hover:text-foreground"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-4">
-              {selectedStories.map((s) => (
+              {(() => {
+                const errorOptions = Array.from(new Set(
+                  selectedStories
+                    .map((s) => retryStatus[s.id]?.finalError)
+                    .filter((e): e is string => !!e)
+                    .map((e) => e.slice(0, 60)),
+                ));
+                const counts = { all: selectedStories.length, queued: 0, writing: 0, done: 0, failed: 0 };
+                for (const s of selectedStories) {
+                  const r = retryStatus[s.id];
+                  if (!r || r.state === "queued") counts.queued++;
+                  else if (r.state === "writing" || r.state === "retrying") counts.writing++;
+                  else if (r.state === "done") counts.done++;
+                  else if (r.state === "failed") counts.failed++;
+                }
+                return (
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] pb-2 border-b border-border">
+                    <span className="text-ink-light">Status:</span>
+                    {(["all", "queued", "writing", "done", "failed"] as const).map((k) => (
+                      <button
+                        key={k}
+                        onClick={() => setBulkStatusFilter(k)}
+                        className={`px-2 py-0.5 rounded-sm border ${bulkStatusFilter === k ? "border-primary text-primary bg-primary/5" : "border-border text-ink-mid hover:text-foreground"}`}
+                      >
+                        {k === "done" ? "Accepted" : k === "failed" ? "Failed" : k === "writing" ? "In-progress" : k === "queued" ? "Pending" : "All"} · {counts[k]}
+                      </button>
+                    ))}
+                    <span className="text-ink-light ml-2">Attempts:</span>
+                    {(["all", "1", "2+", "3+"] as const).map((k) => (
+                      <button
+                        key={k}
+                        onClick={() => setBulkAttemptFilter(k)}
+                        className={`px-2 py-0.5 rounded-sm border ${bulkAttemptFilter === k ? "border-primary text-primary bg-primary/5" : "border-border text-ink-mid hover:text-foreground"}`}
+                      >
+                        {k}
+                      </button>
+                    ))}
+                    {errorOptions.length > 0 && (
+                      <>
+                        <span className="text-ink-light ml-2">Last error:</span>
+                        <select
+                          value={bulkErrorFilter}
+                          onChange={(e) => setBulkErrorFilter(e.target.value)}
+                          className="border border-border rounded-sm px-1.5 py-0.5 bg-background text-[11px] max-w-[200px]"
+                        >
+                          <option value="all">All</option>
+                          {errorOptions.map((e) => <option key={e} value={e}>{e}</option>)}
+                        </select>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+              {selectedStories
+                .filter((s) => {
+                  const r = retryStatus[s.id];
+                  if (bulkStatusFilter !== "all") {
+                    const state = !r || r.state === "queued" ? "queued"
+                      : (r.state === "writing" || r.state === "retrying") ? "writing"
+                      : r.state;
+                    if (state !== bulkStatusFilter) return false;
+                  }
+                  if (bulkAttemptFilter !== "all") {
+                    const a = r?.attempts ?? 0;
+                    if (bulkAttemptFilter === "1" && a !== 1) return false;
+                    if (bulkAttemptFilter === "2+" && a < 2) return false;
+                    if (bulkAttemptFilter === "3+" && a < 3) return false;
+                  }
+                  if (bulkErrorFilter !== "all") {
+                    if (!r?.finalError?.startsWith(bulkErrorFilter)) return false;
+                  }
+                  return true;
+                })
+                .map((s) => (
                 <div key={s.id} className="border border-border rounded p-4">
                   <div className="flex items-center gap-2 mb-1 text-[11px]">
                     <span className="font-mono-amaica text-primary uppercase tracking-wider">{s.source}</span>
