@@ -95,7 +95,7 @@ Deno.test("fetchWithBackoff honors numeric retry-after seconds", async () => {
   try {
     const res = await fetchWithBackoff("http://x", {}, {
       baseMs: 1000, capMs: 8000, maxAttempts: 3,
-      onRetry: (info) => onRetry.push({ attempt: info.attempt, delayMs: info.delayMs, retryAfterMs: info.retryAfterMs }),
+      onRetry: (info) => { onRetry.push({ attempt: info.attempt, delayMs: info.delayMs, retryAfterMs: info.retryAfterMs }); },
     });
     assertEquals(res.response!.status, 200);
     assertEquals(onRetry.length, 1);
