@@ -33,6 +33,9 @@ export default function Discover() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkPreview, setBulkPreview] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkStatusFilter, setBulkStatusFilter] = useState<"all" | "queued" | "writing" | "done" | "failed">("all");
+  const [bulkAttemptFilter, setBulkAttemptFilter] = useState<"all" | "1" | "2+" | "3+">("all");
+  const [bulkErrorFilter, setBulkErrorFilter] = useState<string>("all");
   type RetryStatus = {
     state: "queued" | "writing" | "retrying" | "done" | "failed";
     attempts?: number;
