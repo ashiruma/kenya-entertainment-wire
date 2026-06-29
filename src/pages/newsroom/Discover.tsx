@@ -253,24 +253,42 @@ export default function Discover() {
   };
   const bulkDraft = async () => {
     if (selectedStories.length === 0) return;
-    setBulkProgress({ done: 0, total: selectedStories.length });
+    await runDraftBatch(selectedStories);
+  };
+
+  const retryFailed = async () => {
+    const failedIds = Object.entries(retryStatus)
+      .filter(([, r]) => r.state === "failed")
+      .map(([id]) => id);
+    const toRetry = stories.filter((s) => failedIds.includes(s.id));
+    if (toRetry.length === 0) {
+      toast.message("Nothing to retry");
+      return;
+    }
+    await runDraftBatch(toRetry);
+  };
+
+  const runDraftBatch = async (batch: Story[]) => {
+    setBulkProgress({ done: 0, total: batch.length });
     setRetryStatus((prev) => {
       const next = { ...prev };
-      for (const s of selectedStories) next[s.id] = { state: "queued" };
+      for (const s of batch) next[s.id] = { state: "queued" };
       return next;
     });
     let ok = 0, fail = 0;
-    for (const s of selectedStories) {
+    for (const s of batch) {
       try { await writeDraft(s, { skipNavigate: true }); ok++; }
       catch { fail++; }
       setBulkProgress((p) => p ? { ...p, done: p.done + 1 } : p);
     }
     setBulkProgress(null);
-    setSelected(new Set());
     // Keep the preview open if anything failed so the editor can see the reasons.
-    if (fail === 0) setBulkPreview(false);
+    if (fail === 0) {
+      setSelected(new Set());
+      setBulkPreview(false);
+    }
     toast.success(`Created ${ok} draft${ok === 1 ? "" : "s"}${fail ? ` · ${fail} failed` : ""}`);
-    if (fail === 0) navigate("/newsroom/drafts");
+    if (fail === 0 && batch.length > 1) navigate("/newsroom/drafts");
   };
 
   return (
