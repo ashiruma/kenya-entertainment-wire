@@ -500,6 +500,20 @@ export default function Discover() {
                   {retryStatus[s.id]?.finalError && (
                     <div className="mt-2 text-[11px] text-destructive">{retryStatus[s.id].finalError}</div>
                   )}
+                  <details className="mt-2 text-[11px] text-ink-light">
+                    <summary className="cursor-pointer hover:text-foreground">Debug</summary>
+                    <div className="mt-1.5 space-y-0.5 font-mono-amaica">
+                      <div><span className="text-ink-light">idempotency_key:</span> wa:{s.id}</div>
+                      <div><span className="text-ink-light">attempts:</span> {retryStatus[s.id]?.attempts ?? 0}</div>
+                      <div><span className="text-ink-light">state:</span> {retryStatus[s.id]?.state ?? "—"}</div>
+                      {retryStatus[s.id]?.finalStatus != null && (
+                        <div><span className="text-ink-light">http:</span> {retryStatus[s.id]!.finalStatus}</div>
+                      )}
+                      {retryStatus[s.id]?.nextRetryAt && (
+                        <div><span className="text-ink-light">next_retry:</span> {new Date(retryStatus[s.id]!.nextRetryAt!).toLocaleTimeString()}</div>
+                      )}
+                    </div>
+                  </details>
                 </div>
               ))}
               <div className="flex items-center gap-2 pt-2 border-t border-border sticky bottom-0 bg-background py-3">
@@ -511,6 +525,15 @@ export default function Discover() {
                   <Sparkles size={14} />
                   {bulkProgress ? `Drafting ${bulkProgress.done}/${bulkProgress.total}…` : `Create ${selectedStories.length} drafts`}
                 </button>
+                {Object.values(retryStatus).some((r) => r.state === "failed") && (
+                  <button
+                    onClick={retryFailed}
+                    disabled={!!bulkProgress}
+                    className="border border-border px-4 py-2 rounded text-sm font-medium hover:bg-muted flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <RefreshCw size={14} /> Retry failed
+                  </button>
+                )}
                 <button onClick={() => setBulkPreview(false)} className="text-sm text-ink-light hover:text-foreground px-3 py-2">Cancel</button>
               </div>
             </div>
