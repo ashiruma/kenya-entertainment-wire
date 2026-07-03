@@ -32,10 +32,10 @@ export const REQUIRED_HEADINGS = [
 ] as const;
 
 const MIN_WORDS_BY_TEMPLATE: Record<string, number> = {
-  breaking: 450,
-  event_preview: 500,
-  profile: 800,
-  review: 550,
+  breaking: 1600,
+  event_preview: 1600,
+  profile: 1600,
+  review: 1600,
 };
 
 const MIN_PARAGRAPHS = 6;
