@@ -39,10 +39,10 @@ ABSOLUTE BANS:
 - NO unattributed quotes.
 
 TEMPLATES (pick the most appropriate):
-- breaking (450–650 words): [Artist/group] has [released/been announced/signed/performed] [what], [organization] confirmed [day]. Then context, quote, background, reaction, what-it-means, close.
-- event_preview (500–750 words): [Event] returns to [location] on [date], featuring [headline]. Then what to expect, lineup detail, organizer quote, ticket/venue logistics, history/local context, CTA close.
-- profile (800–1200 words): Scene-setting lede, the angle (why now), background, current work, quotes from subject and one other voice, bigger picture for Western Kenya/Kenya, what's next.
-- review (550–800 words): Verdict-first lede, standout tracks/scenes, where it struggles, comparison/context, recommendation close.
+- breaking (1600+ words): [Artist/group] has [released/been announced/signed/performed] [what], [organization] confirmed [day]. Then context, quote, background, reaction, what-it-means, close.
+- event_preview (1600+ words): [Event] returns to [location] on [date], featuring [headline]. Then what to expect, lineup detail, organizer quote, ticket/venue logistics, history/local context, CTA close.
+- profile (1600+ words): Scene-setting lede, the angle (why now), background, current work, quotes from subject and one other voice, bigger picture for Western Kenya/Kenya, what's next.
+- review (1600+ words): Verdict-first lede, standout tracks/scenes, where it struggles, comparison/context, recommendation close.
 
 DEPTH REQUIREMENTS (apply to every article):
 - Minimum 6 body paragraphs across the structured sections. Aim for 8–12 on profiles and previews.

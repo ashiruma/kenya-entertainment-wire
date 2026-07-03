@@ -117,7 +117,7 @@ export function validateArticle(input: ArticleCheckInput): Issue[] {
   }
 
   // Word count
-  const minWords = MIN_WORDS_BY_TEMPLATE[input.template_type || "breaking"] ?? 450;
+  const minWords = MIN_WORDS_BY_TEMPLATE[input.template_type || "breaking"] ?? 1600;
   const words = countWords(body);
   if (words < minWords) {
     issues.push({
