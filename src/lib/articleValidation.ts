@@ -14,6 +14,7 @@ export type ArticleCheckInput = {
   body?: string | null;
   template_type?: string | null;
   sources?: SourceRef[] | null;
+  min_word_count?: number | null;
 };
 
 export type Issue = {
@@ -116,8 +117,10 @@ export function validateArticle(input: ArticleCheckInput): Issue[] {
     });
   }
 
-  // Word count
-  const minWords = MIN_WORDS_BY_TEMPLATE[input.template_type || "breaking"] ?? 1600;
+  // Word count (admin override wins)
+  const minWords = input.min_word_count && input.min_word_count > 0
+    ? input.min_word_count
+    : (MIN_WORDS_BY_TEMPLATE[input.template_type || "breaking"] ?? 1600);
   const words = countWords(body);
   if (words < minWords) {
     issues.push({

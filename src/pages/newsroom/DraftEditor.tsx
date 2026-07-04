@@ -5,7 +5,8 @@ import { Masthead } from "@/components/Masthead";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { Save, Send, Trash2, Twitter, Instagram, Facebook, Image as ImageIcon, RefreshCw, Globe, ExternalLink, AlertTriangle, CheckCircle2, Link as LinkIcon, Plus, X, Wand2, History } from "lucide-react";
-import { validateArticle, canApprove, noteText, noteSection, REQUIRED_HEADINGS, type SourceRef, type SourceNote, type Issue } from "@/lib/articleValidation";
+import { validateArticle, canApprove, countWords, noteText, noteSection, REQUIRED_HEADINGS, type SourceRef, type SourceNote, type Issue } from "@/lib/articleValidation";
+import { useMinWordCount } from "@/hooks/useNewsroomSettings";
 
 type AuditEntry = {
   id: string;
@@ -52,6 +53,7 @@ export default function DraftEditor() {
   const [wpBusy, setWpBusy] = useState(false);
   const [fixBusy, setFixBusy] = useState(false);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const { minWordCount } = useMinWordCount();
 
   useEffect(() => {
     if (!id || !user) return;
@@ -78,7 +80,8 @@ export default function DraftEditor() {
     body: draft.body,
     template_type: draft.template_type,
     sources: (draft.sources as SourceRef[]) || [],
-  }) : [], [draft?.headline, draft?.lede, draft?.body, draft?.template_type, draft?.sources]);
+    min_word_count: minWordCount,
+  }) : [], [draft?.headline, draft?.lede, draft?.body, draft?.template_type, draft?.sources, minWordCount]);
 
   if (loading) return <div className="min-h-screen bg-background" />;
   if (!user) return <Navigate to="/auth" replace />;
@@ -302,7 +305,28 @@ export default function DraftEditor() {
           </div>
 
           <div>
-            <label className="label-eyebrow block mb-1">Body (markdown)</label>
+            <div className="flex items-center justify-between mb-1 gap-2">
+              <label className="label-eyebrow">Body (markdown)</label>
+              {(() => {
+                const words = countWords(draft.body || "");
+                const pct = Math.min(100, Math.round((words / minWordCount) * 100));
+                const under = words < minWordCount;
+                return (
+                  <div className="flex items-center gap-2 text-[11px]" title={`Target ≥ ${minWordCount} words`}>
+                    <div className="w-24 h-1.5 bg-muted rounded overflow-hidden">
+                      <div
+                        className={`h-full transition-all ${under ? "bg-destructive" : "bg-primary"}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className={under ? "text-destructive font-medium" : "text-ink-mid"}>
+                      {words} / {minWordCount} words
+                      {under && ` · ${minWordCount - words} short`}
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
             <p className="text-[11px] text-ink-light mb-1">
               Required sections (in order): <code>## Background</code>, <code>## Key Details</code>, <code>## Quotes</code>, <code>## Why it matters</code>, <code>## Outlook</code>.
             </p>

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth, type AppRole } from "@/lib/auth";
 import { Masthead } from "@/components/Masthead";
 import { toast } from "sonner";
+import { useMinWordCount, DEFAULT_MIN_WORD_COUNT } from "@/hooks/useNewsroomSettings";
 
 type UserRow = {
   user_id: string;
@@ -18,6 +19,32 @@ export default function Admin() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<UserRow[]>([]);
   const [busy, setBusy] = useState(false);
+  const { minWordCount, refresh: refreshSettings } = useMinWordCount();
+  const [minWordInput, setMinWordInput] = useState<string>("");
+  const [savingSetting, setSavingSetting] = useState(false);
+
+  useEffect(() => { setMinWordInput(String(minWordCount)); }, [minWordCount]);
+
+  const saveMinWordCount = async () => {
+    const n = Number(minWordInput);
+    if (!Number.isFinite(n) || n < 100 || n > 10000) {
+      toast.error("Enter a number between 100 and 10000");
+      return;
+    }
+    setSavingSetting(true);
+    try {
+      const { error } = await supabase
+        .from("newsroom_settings")
+        .upsert({ key: "min_word_count", value: n, updated_by: user?.id ?? null }, { onConflict: "key" });
+      if (error) throw error;
+      toast.success(`Minimum word count set to ${n}`);
+      await refreshSettings();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSavingSetting(false);
+    }
+  };
 
   useEffect(() => {
     if (loading) return;
@@ -89,6 +116,31 @@ export default function Admin() {
         <div className="label-eyebrow text-primary mb-2">Newsroom Admin</div>
         <h1 className="font-display text-3xl mb-1">Team & Roles</h1>
         <p className="text-sm text-ink-light mb-6">Promote writers to editors or admins. New signups are writers by default.</p>
+
+        <div className="bg-card border border-border rounded p-4 mb-6">
+          <div className="label-eyebrow text-primary mb-2">Editorial standards</div>
+          <div className="flex items-end gap-3 flex-wrap">
+            <div>
+              <label className="block text-xs text-ink-light mb-1">Minimum article word count</label>
+              <input
+                type="number"
+                min={100}
+                max={10000}
+                value={minWordInput}
+                onChange={(e) => setMinWordInput(e.target.value)}
+                className="w-32 text-sm bg-background border border-border rounded px-3 py-2"
+              />
+            </div>
+            <button
+              onClick={saveMinWordCount}
+              disabled={savingSetting || minWordInput === String(minWordCount)}
+              className="bg-primary text-primary-foreground px-4 py-2 rounded text-sm font-medium hover:bg-primary-mid disabled:opacity-50"
+            >
+              {savingSetting ? "Saving…" : "Save"}
+            </button>
+            <span className="text-[11px] text-ink-light">Default is {DEFAULT_MIN_WORD_COUNT}. Applies to editor checks and bulk preview.</span>
+          </div>
+        </div>
 
         <div className="bg-card border border-border rounded overflow-hidden">
           <table className="w-full text-sm">

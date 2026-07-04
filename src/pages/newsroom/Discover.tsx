@@ -5,6 +5,8 @@ import { useAuth } from "@/lib/auth";
 import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { RefreshCw, Sparkles, MapPin, Clock, ExternalLink, Eye, X, Square, CheckSquare } from "lucide-react";
+import { countWords } from "@/lib/articleValidation";
+import { useMinWordCount } from "@/hooks/useNewsroomSettings";
 
 type Story = {
   id: string;
@@ -25,6 +27,7 @@ type Story = {
 export default function Discover() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const { minWordCount } = useMinWordCount();
   const [stories, setStories] = useState<Story[]>([]);
   const [filter, setFilter] = useState<"all" | "western_kenya" | "national">("all");
   const [discovering, setDiscovering] = useState(false);
@@ -568,6 +571,19 @@ export default function Discover() {
                   </div>
                   <h3 className="font-display text-base leading-snug mb-1">{s.title}</h3>
                   {s.preview_summary && <p className="text-xs text-ink-mid mb-2 line-clamp-3">{s.preview_summary}</p>}
+                  {(() => {
+                    const src = [s.title, s.preview_summary, s.excerpt, ...(s.highlights || [])]
+                      .filter(Boolean).join("\n");
+                    const w = countWords(src);
+                    const short = w < minWordCount;
+                    return (
+                      <div className={`text-[11px] mt-1 flex items-center gap-1 ${short ? "text-amber-700" : "text-ink-mid"}`}
+                        title="Word count of source material fed into the writer. The written draft must reach the minimum.">
+                        <span className="font-medium">Source words:</span> {w} / {minWordCount}
+                        {short && <span>· writer must expand by ~{minWordCount - w}</span>}
+                      </div>
+                    );
+                  })()}
                   {s.highlights && s.highlights.length > 0 && (
                     <ul className="text-xs space-y-1 mt-2">
                       {s.highlights.slice(0, 3).map((h, i) => <li key={i} className="border-l-2 border-primary pl-2 text-ink-mid">{h}</li>)}
