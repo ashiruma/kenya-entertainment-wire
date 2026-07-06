@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "sdk_version": "0.20.0",
+  "path": "/functions/v1/mcp",
+  "auth": {
+    "type": "none"
+  },
+  "mcp": {
+    "server": {
+      "name": "amaica-media-mcp",
+      "version": "0.1.0",
+      "title": "Amaica Media MCP"
+    },
+    "tools": [
+      {
+        "name": "list_latest_articles",
+        "title": "List latest articles",
+        "description": "List the most recently published Amaica Media articles, optionally filtered by category or region.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10,
+              "description": "How many articles to return (max 50)."
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "music",
+                "film",
+                "tv",
+                "events",
+                "celebrity",
+                "culture",
+                "Our Legends"
+              ],
+              "description": "Filter by category."
+            },
+            "region": {
+              "type": "string",
+              "enum": [
+                "western_kenya",
+                "national"
+              ],
+              "description": "Filter by region."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_article",
+        "title": "Get article",
+        "description": "Fetch the full body and metadata of a published Amaica Media article by its id.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The article id (uuid)."
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_legends",
+        "title": "List legends",
+        "description": "List African entertainment legends in the Amaica 'Our Legends' roster.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "description": "How many legends to return."
+            },
+            "country": {
+              "type": "string",
+              "description": "Filter by country name."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
