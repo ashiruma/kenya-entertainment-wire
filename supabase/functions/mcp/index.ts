@@ -42,10 +42,16 @@ var list_latest_articles_default = defineTool({
 import { defineTool as defineTool2 } from "npm:@lovable.dev/mcp-js@0.20.1";
 import { createClient as createClient2 } from "npm:@supabase/supabase-js@^2.105.1";
 import { z as z2 } from "npm:zod@^3.25.76";
+function countWords(text) {
+  if (!text) return 0;
+  const stripped = String(text).replace(/<[^>]+>/g, " ");
+  const matches = stripped.trim().match(/\S+/g);
+  return matches ? matches.length : 0;
+}
 var get_article_default = defineTool2({
   name: "get_article",
   title: "Get article",
-  description: "Fetch the full body and metadata of a published Amaica Media article by its id.",
+  description: "Fetch a published Amaica Media article by id. Returns a strict typed payload with headline, lede, body, byline, category, region, status, published_at, hero_image_url, word_count, sources (array of {url,title?,note?,section?}), and legend info when the article is an Our Legends feature.",
   inputSchema: {
     id: z2.string().uuid().describe("The article id (uuid).")
   },
@@ -55,12 +61,50 @@ var get_article_default = defineTool2({
       process.env.SUPABASE_URL,
       process.env.SUPABASE_PUBLISHABLE_KEY
     );
-    const { data, error } = await supabase.from("drafts").select("id, headline, lede, body, category, region, hero_image_url, published_at, byline, sources").eq("id", id).eq("status", "published").maybeSingle();
+    const { data, error } = await supabase.from("drafts").select(
+      "id, headline, lede, body, category, region, hero_image_url, published_at, byline, sources, status, template_type, updated_at"
+    ).eq("id", id).eq("status", "published").maybeSingle();
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
     if (!data) return { content: [{ type: "text", text: "Article not found" }], isError: true };
+    const rawSources = Array.isArray(data.sources) ? data.sources : [];
+    const sources = rawSources.map((s) => {
+      if (typeof s === "string") return { url: s };
+      if (s && typeof s === "object") {
+        return {
+          url: typeof s.url === "string" ? s.url : "",
+          title: typeof s.title === "string" ? s.title : void 0,
+          note: typeof s.note === "string" ? s.note : void 0,
+          section: typeof s.section === "string" ? s.section : void 0
+        };
+      }
+      return { url: "" };
+    }).filter((s) => s.url);
+    let legend = null;
+    if (data.category === "Our Legends") {
+      const { data: lf } = await supabase.from("legend_features").select("legend_id, legends:legend_id ( id, name, country )").eq("draft_id", data.id).maybeSingle();
+      const l = lf?.legends;
+      if (l) legend = { id: l.id, name: l.name, country: l.country ?? null };
+    }
+    const article = {
+      id: data.id,
+      headline: data.headline,
+      lede: data.lede ?? "",
+      body: data.body ?? "",
+      byline: data.byline ?? null,
+      category: data.category ?? null,
+      region: data.region ?? null,
+      status: data.status,
+      template_type: data.template_type ?? null,
+      hero_image_url: data.hero_image_url ?? null,
+      published_at: data.published_at ?? null,
+      updated_at: data.updated_at ?? null,
+      word_count: countWords(data.body),
+      sources,
+      legend
+    };
     return {
-      content: [{ type: "text", text: JSON.stringify(data) }],
-      structuredContent: { article: data }
+      content: [{ type: "text", text: JSON.stringify(article) }],
+      structuredContent: { article }
     };
   }
 });

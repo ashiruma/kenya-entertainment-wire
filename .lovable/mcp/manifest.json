@@ -61,7 +61,7 @@
       {
         "name": "get_article",
         "title": "Get article",
-        "description": "Fetch the full body and metadata of a published Amaica Media article by its id.",
+        "description": "Fetch a published Amaica Media article by id. Returns a strict typed payload with headline, lede, body, byline, category, region, status, published_at, hero_image_url, word_count, sources (array of {url,title?,note?,section?}), and legend info when the article is an Our Legends feature.",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
