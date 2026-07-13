@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sdk_version": "0.20.0",
+  "sdk_version": "0.20.1",
   "path": "/functions/v1/mcp",
   "auth": {
     "type": "none"
@@ -15,7 +15,7 @@
       {
         "name": "list_latest_articles",
         "title": "List latest articles",
-        "description": "List the most recently published Amaica Media articles, optionally filtered by category or region.",
+        "description": "List the most recently published Amaica Media articles, optionally filtered by category or region. Returns a strict typed array of {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend}.",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
@@ -59,9 +59,67 @@
         "outputSchema": null
       },
       {
+        "name": "search_articles",
+        "title": "Search articles",
+        "description": "Full-text search of published Amaica Media articles by keywords across headline, lede, and body. Supports region scoping ('western_kenya', 'kenya', 'national', or 'all') so callers can focus on Western Kenya or broader Kenyan entertainment coverage. Returns a strict typed array of {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score}.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 200,
+              "description": "Keywords to search for (matched across headline, lede, and body)."
+            },
+            "region_scope": {
+              "type": "string",
+              "enum": [
+                "western_kenya",
+                "kenya",
+                "national",
+                "all"
+              ],
+              "default": "all",
+              "description": "Scope results by region. 'western_kenya' restricts to region='western_kenya' OR body/headline mentioning a Western Kenya county/town. 'kenya' includes both national and western_kenya rows. 'national' restricts to region='national'. 'all' returns everything."
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "music",
+                "film",
+                "tv",
+                "events",
+                "celebrity",
+                "culture",
+                "Our Legends"
+              ],
+              "description": "Optional category filter."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "Maximum results to return (max 50)."
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
         "name": "get_article",
         "title": "Get article",
-        "description": "Fetch the full body and metadata of a published Amaica Media article by its id.",
+        "description": "Fetch a published Amaica Media article by id. Returns a strict typed payload with headline, lede, body, byline, category, region, status, published_at, hero_image_url, word_count, sources (array of {url,title?,note?,section?}), and legend info when the article is an Our Legends feature.",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
