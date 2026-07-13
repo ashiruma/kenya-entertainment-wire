@@ -168,6 +168,33 @@ function countWords3(text) {
   const matches = stripped.trim().match(/\S+/g);
   return matches ? matches.length : 0;
 }
+function stem(token) {
+  const t = token.toLowerCase();
+  if (t.length <= 4) return t;
+  const suffixes = ["iest", "iness", "ingly", "ing", "edly", "ed", "ies", "es", "ly", "s"];
+  for (const suf of suffixes) {
+    if (t.endsWith(suf) && t.length - suf.length >= 3) {
+      let base = t.slice(0, -suf.length);
+      if (suf === "ies") base += "y";
+      return base;
+    }
+  }
+  return t;
+}
+function parseQuery(query) {
+  const phrases = [];
+  let rest = query;
+  const phraseRe = /"([^"]+)"/g;
+  let m;
+  while ((m = phraseRe.exec(query)) !== null) {
+    const p = m[1].trim();
+    if (p.length >= 2) phrases.push(p);
+  }
+  rest = rest.replace(phraseRe, " ");
+  const tokens = rest.split(/\s+/).map((t) => t.replace(/[%_,()"]/g, "").trim()).filter((t) => t.length >= 2).slice(0, 8);
+  const stems = Array.from(new Set(tokens.map(stem)));
+  return { phrases: phrases.slice(0, 4), tokens, stems };
+}
 var WESTERN_KENYA_TERMS = [
   "western kenya",
   "kakamega",
@@ -196,39 +223,55 @@ var WESTERN_KENYA_TERMS = [
 var search_articles_default = defineTool4({
   name: "search_articles",
   title: "Search articles",
-  description: "Full-text search of published Amaica Media articles by keywords across headline, lede, and body. Supports region scoping ('western_kenya', 'kenya', 'national', or 'all') so callers can focus on Western Kenya or broader Kenyan entertainment coverage. Returns a strict typed array of {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score}.",
+  description: `Full-text search of published Amaica Media articles across headline, lede, and body. Supports quoted "exact phrases", basic English stemming (plurals, -ing, -ed), region scoping ('western_kenya' | 'kenya' | 'national' | 'all'), category filter, published_at date window (start_date / end_date, ISO 8601), and pagination via limit + offset. Returns strict typed {results, count, total, limit, offset, has_more} with each result {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score}.`,
   inputSchema: {
-    query: z4.string().trim().min(2).max(200).describe("Keywords to search for (matched across headline, lede, and body)."),
+    query: z4.string().trim().min(2).max(200).describe(
+      'Keywords to search for across headline, lede, and body. Wrap exact phrases in double quotes (e.g. `"nyanza festival" bongo`). Bare tokens are also matched by simple stems (plurals, -ing, -ed).'
+    ),
     region_scope: z4.enum(["western_kenya", "kenya", "national", "all"]).default("all").describe(
       "Scope results by region. 'western_kenya' restricts to region='western_kenya' OR body/headline mentioning a Western Kenya county/town. 'kenya' includes both national and western_kenya rows. 'national' restricts to region='national'. 'all' returns everything."
     ),
     category: z4.enum(["music", "film", "tv", "events", "celebrity", "culture", "Our Legends"]).optional().describe("Optional category filter."),
-    limit: z4.number().int().min(1).max(50).default(20).describe("Maximum results to return (max 50).")
+    start_date: z4.string().datetime({ offset: true }).optional().describe("Only include articles with published_at >= this ISO 8601 timestamp."),
+    end_date: z4.string().datetime({ offset: true }).optional().describe("Only include articles with published_at <= this ISO 8601 timestamp."),
+    limit: z4.number().int().min(1).max(50).default(20).describe("Page size (max 50)."),
+    offset: z4.number().int().min(0).max(1e4).default(0).describe("Number of results to skip for pagination.")
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ query, region_scope, category, limit }) => {
+  handler: async ({ query, region_scope, category, start_date, end_date, limit, offset }) => {
     const supabase = createClient4(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_PUBLISHABLE_KEY
     );
-    const tokens = query.split(/\s+/).map((t) => t.replace(/[%_,()]/g, "").trim()).filter((t) => t.length >= 2).slice(0, 6);
-    if (tokens.length === 0) {
+    const { phrases, tokens, stems } = parseQuery(query);
+    if (phrases.length === 0 && tokens.length === 0) {
       return { content: [{ type: "text", text: "Query too short" }], isError: true };
     }
     const orClauses = [];
-    for (const t of tokens) {
-      const esc = t.replace(/"/g, "");
+    const pushIlike = (needle) => {
+      const esc = needle.replace(/[,()"]/g, "");
+      if (!esc) return;
       orClauses.push(`headline.ilike.%${esc}%`);
       orClauses.push(`lede.ilike.%${esc}%`);
       orClauses.push(`body.ilike.%${esc}%`);
-    }
-    let q = supabase.from("drafts").select("id, headline, lede, body, category, region, hero_image_url, published_at, byline, sources, status").eq("status", "published").or(orClauses.join(",")).order("published_at", { ascending: false, nullsFirst: false }).limit(Math.min(limit * 3, 150));
+    };
+    for (const p of phrases) pushIlike(p);
+    for (const s of stems) pushIlike(s);
+    let q = supabase.from("drafts").select(
+      "id, headline, lede, body, category, region, hero_image_url, published_at, byline, sources, status",
+      { count: "exact" }
+    ).eq("status", "published").or(orClauses.join(",")).order("published_at", { ascending: false, nullsFirst: false });
     if (category) q = q.eq("category", category);
+    if (start_date) q = q.gte("published_at", start_date);
+    if (end_date) q = q.lte("published_at", end_date);
     if (region_scope === "national") q = q.eq("region", "national");
     else if (region_scope === "kenya") q = q.in("region", ["national", "western_kenya"]);
-    const { data, error } = await q;
+    const fetchCap = Math.min((offset + limit) * 3 + 30, 300);
+    const { data, error, count } = await q.limit(fetchCap);
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };
+    const lowerPhrases = phrases.map((p) => p.toLowerCase());
     const lowerTokens = tokens.map((t) => t.toLowerCase());
+    const lowerStems = stems.map((s) => s.toLowerCase());
     const rows = (data ?? []).filter((d) => {
       if (region_scope !== "western_kenya") return true;
       if (d.region === "western_kenya") return true;
@@ -236,13 +279,29 @@ var search_articles_default = defineTool4({
       return WESTERN_KENYA_TERMS.some((term) => hay.includes(term));
     });
     const scored = rows.map((d) => {
-      const hay = `${d.headline ?? ""} ${d.lede ?? ""} ${d.body ?? ""}`.toLowerCase();
+      const headline = (d.headline ?? "").toLowerCase();
+      const lede = (d.lede ?? "").toLowerCase();
+      const body = (d.body ?? "").toLowerCase();
+      const hay = `${headline} ${lede} ${body}`;
       let score = 0;
+      for (const p of lowerPhrases) {
+        if (headline.includes(p)) score += 15;
+        if (lede.includes(p)) score += 9;
+        const bodyMatches = body.split(p).length - 1;
+        score += Math.min(bodyMatches, 5) * 2;
+      }
       for (const t of lowerTokens) {
-        if ((d.headline ?? "").toLowerCase().includes(t)) score += 5;
-        if ((d.lede ?? "").toLowerCase().includes(t)) score += 3;
+        if (headline.includes(t)) score += 5;
+        if (lede.includes(t)) score += 3;
         const bodyMatches = hay.split(t).length - 1;
         score += Math.min(bodyMatches, 5);
+      }
+      for (const s of lowerStems) {
+        if (lowerTokens.includes(s)) continue;
+        if (headline.includes(s)) score += 2;
+        if (lede.includes(s)) score += 1;
+        const bodyMatches = body.split(s).length - 1;
+        score += Math.min(bodyMatches, 3) * 0.5;
       }
       return {
         id: d.id,
@@ -259,10 +318,27 @@ var search_articles_default = defineTool4({
         is_legend: d.category === "Our Legends",
         match_score: score
       };
-    }).sort((a, b) => b.match_score - a.match_score).slice(0, limit);
+    }).sort((a, b) => b.match_score - a.match_score);
+    const paged = scored.slice(offset, offset + limit);
+    const total = typeof count === "number" ? count : scored.length;
+    const has_more = offset + paged.length < scored.length || offset + limit < total;
     return {
-      content: [{ type: "text", text: JSON.stringify(scored) }],
-      structuredContent: { query, region_scope, results: scored, count: scored.length }
+      content: [{ type: "text", text: JSON.stringify(paged) }],
+      structuredContent: {
+        query,
+        region_scope,
+        phrases,
+        tokens,
+        stems,
+        start_date: start_date ?? null,
+        end_date: end_date ?? null,
+        limit,
+        offset,
+        count: paged.length,
+        total,
+        has_more,
+        results: paged
+      }
     };
   }
 });
