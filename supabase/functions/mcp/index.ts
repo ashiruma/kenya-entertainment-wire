@@ -9,10 +9,16 @@ import { defineMcp } from "npm:@lovable.dev/mcp-js@0.20.1";
 import { defineTool } from "npm:@lovable.dev/mcp-js@0.20.1";
 import { createClient } from "npm:@supabase/supabase-js@^2.105.1";
 import { z } from "npm:zod@^3.25.76";
+function countWords(text) {
+  if (!text) return 0;
+  const stripped = String(text).replace(/<[^>]+>/g, " ");
+  const matches = stripped.trim().match(/\S+/g);
+  return matches ? matches.length : 0;
+}
 var list_latest_articles_default = defineTool({
   name: "list_latest_articles",
   title: "List latest articles",
-  description: "List the most recently published Amaica Media articles, optionally filtered by category or region.",
+  description: "List the most recently published Amaica Media articles, optionally filtered by category or region. Returns a strict typed array of {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend}.",
   inputSchema: {
     limit: z.number().int().min(1).max(50).default(10).describe("How many articles to return (max 50)."),
     category: z.enum(["music", "film", "tv", "events", "celebrity", "culture", "Our Legends"]).optional().describe("Filter by category."),
@@ -24,16 +30,30 @@ var list_latest_articles_default = defineTool({
       process.env.SUPABASE_URL,
       process.env.SUPABASE_PUBLISHABLE_KEY
     );
-    let q = supabase.from("drafts").select("id, headline, lede, category, region, hero_image_url, published_at, byline").eq("status", "published").order("published_at", { ascending: false, nullsFirst: false }).limit(limit);
+    let q = supabase.from("drafts").select("id, headline, lede, body, category, region, hero_image_url, published_at, byline, sources, status").eq("status", "published").order("published_at", { ascending: false, nullsFirst: false }).limit(limit);
     if (category) q = q.eq("category", category);
     if (region) q = q.eq("region", region);
     const { data, error } = await q;
     if (error) {
       return { content: [{ type: "text", text: error.message }], isError: true };
     }
+    const articles = (data ?? []).map((d) => ({
+      id: d.id,
+      headline: d.headline,
+      lede: d.lede ?? "",
+      byline: d.byline ?? null,
+      category: d.category ?? null,
+      region: d.region ?? null,
+      status: d.status,
+      hero_image_url: d.hero_image_url ?? null,
+      published_at: d.published_at ?? null,
+      word_count: countWords(d.body),
+      source_count: Array.isArray(d.sources) ? d.sources.length : 0,
+      is_legend: d.category === "Our Legends"
+    }));
     return {
-      content: [{ type: "text", text: JSON.stringify(data ?? []) }],
-      structuredContent: { articles: data ?? [] }
+      content: [{ type: "text", text: JSON.stringify(articles) }],
+      structuredContent: { articles }
     };
   }
 });
@@ -42,7 +62,7 @@ var list_latest_articles_default = defineTool({
 import { defineTool as defineTool2 } from "npm:@lovable.dev/mcp-js@0.20.1";
 import { createClient as createClient2 } from "npm:@supabase/supabase-js@^2.105.1";
 import { z as z2 } from "npm:zod@^3.25.76";
-function countWords(text) {
+function countWords2(text) {
   if (!text) return 0;
   const stripped = String(text).replace(/<[^>]+>/g, " ");
   const matches = stripped.trim().match(/\S+/g);
@@ -98,7 +118,7 @@ var get_article_default = defineTool2({
       hero_image_url: data.hero_image_url ?? null,
       published_at: data.published_at ?? null,
       updated_at: data.updated_at ?? null,
-      word_count: countWords(data.body),
+      word_count: countWords2(data.body),
       sources,
       legend
     };
