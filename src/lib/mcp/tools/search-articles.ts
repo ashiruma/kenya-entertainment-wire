@@ -57,9 +57,8 @@ const WESTERN_KENYA_TERMS = [
 // Strict ISO 8601 check. Zod's `.datetime()` runs before the handler and its
 // errors surface as raw validation objects — we want a friendly MCP-facing
 // message, so we accept plain strings and validate here.
-function parseIsoDate(value: string | undefined, field: string):
-  | { ok: true; value: string | undefined }
-  | { ok: false; error: string } {
+type IsoResult = { ok: true; value: string | undefined; error?: undefined } | { ok: false; value?: undefined; error: string };
+function parseIsoDate(value: string | undefined, field: string): IsoResult {
   if (value === undefined || value === null || value === "") return { ok: true, value: undefined };
   // Require a full ISO 8601 date-time with timezone or 'Z'.
   const isoRe = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/;
