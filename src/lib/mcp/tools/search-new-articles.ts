@@ -16,7 +16,9 @@ const WESTERN_KENYA_TERMS = [
   "luo", "kalenjin", "nyanza", "rift valley",
 ];
 
-function parseIso(value: string, field: string): { ok: true; iso: string } | { ok: false; error: string } {
+type IsoOk = { ok: true; iso: string; error?: undefined };
+type IsoErr = { ok: false; iso?: undefined; error: string };
+function parseIso(value: string, field: string): IsoOk | IsoErr {
   const isoRe = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/;
   if (!isoRe.test(value)) {
     return { ok: false, error: `Invalid ${field}: '${value}'. Expected ISO 8601 like '2025-07-14T09:00:00Z'.` };
