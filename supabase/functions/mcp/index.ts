@@ -220,10 +220,68 @@ var WESTERN_KENYA_TERMS = [
   "nyanza",
   "rift valley"
 ];
+function parseIsoDate(value, field) {
+  if (value === void 0 || value === null || value === "") return { ok: true, value: void 0 };
+  const isoRe = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/;
+  if (!isoRe.test(value)) {
+    return {
+      ok: false,
+      error: `Invalid ${field}: '${value}'. Expected an ISO 8601 timestamp like '2025-01-31T09:00:00Z' or '2025-01-31T09:00:00+03:00'.`
+    };
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    return { ok: false, error: `Invalid ${field}: '${value}' is not a real calendar date.` };
+  }
+  return { ok: true, value: d.toISOString() };
+}
+function buildSnippets(body, headline, lede, needles, maxSnippets = 3, radius = 90) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const sources = [
+    { field: "headline", text: headline ?? "" },
+    { field: "lede", text: lede ?? "" },
+    { field: "body", text: (body ?? "").replace(/<[^>]+>/g, " ") }
+  ];
+  for (const needle of needles) {
+    if (!needle) continue;
+    const n = needle.toLowerCase();
+    for (const src of sources) {
+      if (out.length >= maxSnippets) break;
+      const hay = src.text;
+      const idx = hay.toLowerCase().indexOf(n);
+      if (idx === -1) continue;
+      const start = Math.max(0, idx - radius);
+      const end = Math.min(hay.length, idx + needle.length + radius);
+      let raw = hay.slice(start, end).replace(/\s+/g, " ").trim();
+      const rel = raw.toLowerCase().indexOf(n);
+      if (rel !== -1) {
+        raw = raw.slice(0, rel) + "**" + raw.slice(rel, rel + needle.length) + "**" + raw.slice(rel + needle.length);
+      }
+      const key = `${src.field}:${raw}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ field: src.field, match: needle, text: (start > 0 ? "\u2026" : "") + raw + (end < hay.length ? "\u2026" : "") });
+      if (out.length >= maxSnippets) break;
+    }
+  }
+  return out;
+}
+var SEARCH_EXAMPLES = `
+
+Examples:
+- Western Kenya scoping with pagination:
+  { "query": "kakamega bullfighting", "region_scope": "western_kenya", "limit": 10, "offset": 0 }
+- Phrase match + Kenya-wide scope:
+  { "query": "\\"luo festival\\" bongo", "region_scope": "kenya", "limit": 20 }
+- Date-window filter for last month's national coverage:
+  { "query": "afrobeats concert", "region_scope": "national", "start_date": "2025-06-01T00:00:00Z", "end_date": "2025-06-30T23:59:59Z" }
+- Legends-only backlog with pagination:
+  { "query": "ogada", "category": "Our Legends", "limit": 25, "offset": 25 }`;
 var search_articles_default = defineTool4({
   name: "search_articles",
   title: "Search articles",
-  description: `Full-text search of published Amaica Media articles across headline, lede, and body. Supports quoted "exact phrases", basic English stemming (plurals, -ing, -ed), region scoping ('western_kenya' | 'kenya' | 'national' | 'all'), category filter, published_at date window (start_date / end_date, ISO 8601), and pagination via limit + offset. Returns strict typed {results, count, total, limit, offset, has_more} with each result {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score}.`,
+  description: `Full-text search of published Amaica Media articles across headline, lede, and body. Supports quoted "exact phrases", basic English stemming (plurals, -ing, -ed), region scoping ('western_kenya' | 'kenya' | 'national' | 'all'), category filter, published_at date window (start_date / end_date, ISO 8601), and pagination via limit + offset. Returns strict typed {results, count, total, limit, offset, has_more} with each result including {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score, snippets:[{field,match,text}]}.` + SEARCH_EXAMPLES,
   inputSchema: {
     query: z4.string().trim().min(2).max(200).describe(
       'Keywords to search for across headline, lede, and body. Wrap exact phrases in double quotes (e.g. `"nyanza festival" bongo`). Bare tokens are also matched by simple stems (plurals, -ing, -ed).'
@@ -232,8 +290,12 @@ var search_articles_default = defineTool4({
       "Scope results by region. 'western_kenya' restricts to region='western_kenya' OR body/headline mentioning a Western Kenya county/town. 'kenya' includes both national and western_kenya rows. 'national' restricts to region='national'. 'all' returns everything."
     ),
     category: z4.enum(["music", "film", "tv", "events", "celebrity", "culture", "Our Legends"]).optional().describe("Optional category filter."),
-    start_date: z4.string().datetime({ offset: true }).optional().describe("Only include articles with published_at >= this ISO 8601 timestamp."),
-    end_date: z4.string().datetime({ offset: true }).optional().describe("Only include articles with published_at <= this ISO 8601 timestamp."),
+    start_date: z4.string().optional().describe(
+      "Only include articles with published_at >= this ISO 8601 timestamp (e.g. '2025-01-31T09:00:00Z'). Invalid values return a clear error."
+    ),
+    end_date: z4.string().optional().describe(
+      "Only include articles with published_at <= this ISO 8601 timestamp (e.g. '2025-01-31T09:00:00Z'). Invalid values return a clear error."
+    ),
     limit: z4.number().int().min(1).max(50).default(20).describe("Page size (max 50)."),
     offset: z4.number().int().min(0).max(1e4).default(0).describe("Number of results to skip for pagination.")
   },
@@ -243,6 +305,18 @@ var search_articles_default = defineTool4({
       process.env.SUPABASE_URL,
       process.env.SUPABASE_PUBLISHABLE_KEY
     );
+    const parsedStart = parseIsoDate(start_date, "start_date");
+    if (!parsedStart.ok) return { content: [{ type: "text", text: parsedStart.error }], isError: true };
+    const parsedEnd = parseIsoDate(end_date, "end_date");
+    if (!parsedEnd.ok) return { content: [{ type: "text", text: parsedEnd.error }], isError: true };
+    if (parsedStart.value && parsedEnd.value && parsedStart.value > parsedEnd.value) {
+      return {
+        content: [{ type: "text", text: `Invalid date window: start_date (${parsedStart.value}) is after end_date (${parsedEnd.value}).` }],
+        isError: true
+      };
+    }
+    const startIso = parsedStart.value;
+    const endIso = parsedEnd.value;
     const { phrases, tokens, stems } = parseQuery(query);
     if (phrases.length === 0 && tokens.length === 0) {
       return { content: [{ type: "text", text: "Query too short" }], isError: true };
@@ -262,8 +336,8 @@ var search_articles_default = defineTool4({
       { count: "exact" }
     ).eq("status", "published").or(orClauses.join(",")).order("published_at", { ascending: false, nullsFirst: false });
     if (category) q = q.eq("category", category);
-    if (start_date) q = q.gte("published_at", start_date);
-    if (end_date) q = q.lte("published_at", end_date);
+    if (startIso) q = q.gte("published_at", startIso);
+    if (endIso) q = q.lte("published_at", endIso);
     if (region_scope === "national") q = q.eq("region", "national");
     else if (region_scope === "kenya") q = q.in("region", ["national", "western_kenya"]);
     const fetchCap = Math.min((offset + limit) * 3 + 30, 300);
@@ -316,7 +390,14 @@ var search_articles_default = defineTool4({
         word_count: countWords3(d.body),
         source_count: Array.isArray(d.sources) ? d.sources.length : 0,
         is_legend: d.category === "Our Legends",
-        match_score: score
+        match_score: score,
+        snippets: buildSnippets(
+          d.body ?? "",
+          d.headline ?? "",
+          d.lede ?? "",
+          // Prefer exact phrases, then tokens (skip stems already covered).
+          [...phrases, ...tokens]
+        )
       };
     }).sort((a, b) => b.match_score - a.match_score);
     const paged = scored.slice(offset, offset + limit);
@@ -330,8 +411,8 @@ var search_articles_default = defineTool4({
         phrases,
         tokens,
         stems,
-        start_date: start_date ?? null,
-        end_date: end_date ?? null,
+        start_date: startIso ?? null,
+        end_date: endIso ?? null,
         limit,
         offset,
         count: paged.length,
