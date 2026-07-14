@@ -220,10 +220,68 @@ var WESTERN_KENYA_TERMS = [
   "nyanza",
   "rift valley"
 ];
+function parseIsoDate(value, field) {
+  if (value === void 0 || value === null || value === "") return { ok: true, value: void 0 };
+  const isoRe = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/;
+  if (!isoRe.test(value)) {
+    return {
+      ok: false,
+      error: `Invalid ${field}: '${value}'. Expected an ISO 8601 timestamp like '2025-01-31T09:00:00Z' or '2025-01-31T09:00:00+03:00'.`
+    };
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    return { ok: false, error: `Invalid ${field}: '${value}' is not a real calendar date.` };
+  }
+  return { ok: true, value: d.toISOString() };
+}
+function buildSnippets(body, headline, lede, needles, maxSnippets = 3, radius = 90) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const sources = [
+    { field: "headline", text: headline ?? "" },
+    { field: "lede", text: lede ?? "" },
+    { field: "body", text: (body ?? "").replace(/<[^>]+>/g, " ") }
+  ];
+  for (const needle of needles) {
+    if (!needle) continue;
+    const n = needle.toLowerCase();
+    for (const src of sources) {
+      if (out.length >= maxSnippets) break;
+      const hay = src.text;
+      const idx = hay.toLowerCase().indexOf(n);
+      if (idx === -1) continue;
+      const start = Math.max(0, idx - radius);
+      const end = Math.min(hay.length, idx + needle.length + radius);
+      let raw = hay.slice(start, end).replace(/\s+/g, " ").trim();
+      const rel = raw.toLowerCase().indexOf(n);
+      if (rel !== -1) {
+        raw = raw.slice(0, rel) + "**" + raw.slice(rel, rel + needle.length) + "**" + raw.slice(rel + needle.length);
+      }
+      const key = `${src.field}:${raw}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ field: src.field, match: needle, text: (start > 0 ? "\u2026" : "") + raw + (end < hay.length ? "\u2026" : "") });
+      if (out.length >= maxSnippets) break;
+    }
+  }
+  return out;
+}
+var SEARCH_EXAMPLES = `
+
+Examples:
+- Western Kenya scoping with pagination:
+  { "query": "kakamega bullfighting", "region_scope": "western_kenya", "limit": 10, "offset": 0 }
+- Phrase match + Kenya-wide scope:
+  { "query": "\\"luo festival\\" bongo", "region_scope": "kenya", "limit": 20 }
+- Date-window filter for last month's national coverage:
+  { "query": "afrobeats concert", "region_scope": "national", "start_date": "2025-06-01T00:00:00Z", "end_date": "2025-06-30T23:59:59Z" }
+- Legends-only backlog with pagination:
+  { "query": "ogada", "category": "Our Legends", "limit": 25, "offset": 25 }`;
 var search_articles_default = defineTool4({
   name: "search_articles",
   title: "Search articles",
-  description: `Full-text search of published Amaica Media articles across headline, lede, and body. Supports quoted "exact phrases", basic English stemming (plurals, -ing, -ed), region scoping ('western_kenya' | 'kenya' | 'national' | 'all'), category filter, published_at date window (start_date / end_date, ISO 8601), and pagination via limit + offset. Returns strict typed {results, count, total, limit, offset, has_more} with each result {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score}.`,
+  description: `Full-text search of published Amaica Media articles across headline, lede, and body. Supports quoted "exact phrases", basic English stemming (plurals, -ing, -ed), region scoping ('western_kenya' | 'kenya' | 'national' | 'all'), category filter, published_at date window (start_date / end_date, ISO 8601), and pagination via limit + offset. Returns strict typed {results, count, total, limit, offset, has_more} with each result including {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score, snippets:[{field,match,text}]}.` + SEARCH_EXAMPLES,
   inputSchema: {
     query: z4.string().trim().min(2).max(200).describe(
       'Keywords to search for across headline, lede, and body. Wrap exact phrases in double quotes (e.g. `"nyanza festival" bongo`). Bare tokens are also matched by simple stems (plurals, -ing, -ed).'
@@ -232,8 +290,12 @@ var search_articles_default = defineTool4({
       "Scope results by region. 'western_kenya' restricts to region='western_kenya' OR body/headline mentioning a Western Kenya county/town. 'kenya' includes both national and western_kenya rows. 'national' restricts to region='national'. 'all' returns everything."
     ),
     category: z4.enum(["music", "film", "tv", "events", "celebrity", "culture", "Our Legends"]).optional().describe("Optional category filter."),
-    start_date: z4.string().datetime({ offset: true }).optional().describe("Only include articles with published_at >= this ISO 8601 timestamp."),
-    end_date: z4.string().datetime({ offset: true }).optional().describe("Only include articles with published_at <= this ISO 8601 timestamp."),
+    start_date: z4.string().optional().describe(
+      "Only include articles with published_at >= this ISO 8601 timestamp (e.g. '2025-01-31T09:00:00Z'). Invalid values return a clear error."
+    ),
+    end_date: z4.string().optional().describe(
+      "Only include articles with published_at <= this ISO 8601 timestamp (e.g. '2025-01-31T09:00:00Z'). Invalid values return a clear error."
+    ),
     limit: z4.number().int().min(1).max(50).default(20).describe("Page size (max 50)."),
     offset: z4.number().int().min(0).max(1e4).default(0).describe("Number of results to skip for pagination.")
   },
@@ -243,6 +305,18 @@ var search_articles_default = defineTool4({
       process.env.SUPABASE_URL,
       process.env.SUPABASE_PUBLISHABLE_KEY
     );
+    const parsedStart = parseIsoDate(start_date, "start_date");
+    if (!parsedStart.ok) return { content: [{ type: "text", text: parsedStart.error }], isError: true };
+    const parsedEnd = parseIsoDate(end_date, "end_date");
+    if (!parsedEnd.ok) return { content: [{ type: "text", text: parsedEnd.error }], isError: true };
+    if (parsedStart.value && parsedEnd.value && parsedStart.value > parsedEnd.value) {
+      return {
+        content: [{ type: "text", text: `Invalid date window: start_date (${parsedStart.value}) is after end_date (${parsedEnd.value}).` }],
+        isError: true
+      };
+    }
+    const startIso = parsedStart.value;
+    const endIso = parsedEnd.value;
     const { phrases, tokens, stems } = parseQuery(query);
     if (phrases.length === 0 && tokens.length === 0) {
       return { content: [{ type: "text", text: "Query too short" }], isError: true };
@@ -262,8 +336,8 @@ var search_articles_default = defineTool4({
       { count: "exact" }
     ).eq("status", "published").or(orClauses.join(",")).order("published_at", { ascending: false, nullsFirst: false });
     if (category) q = q.eq("category", category);
-    if (start_date) q = q.gte("published_at", start_date);
-    if (end_date) q = q.lte("published_at", end_date);
+    if (startIso) q = q.gte("published_at", startIso);
+    if (endIso) q = q.lte("published_at", endIso);
     if (region_scope === "national") q = q.eq("region", "national");
     else if (region_scope === "kenya") q = q.in("region", ["national", "western_kenya"]);
     const fetchCap = Math.min((offset + limit) * 3 + 30, 300);
@@ -316,7 +390,14 @@ var search_articles_default = defineTool4({
         word_count: countWords3(d.body),
         source_count: Array.isArray(d.sources) ? d.sources.length : 0,
         is_legend: d.category === "Our Legends",
-        match_score: score
+        match_score: score,
+        snippets: buildSnippets(
+          d.body ?? "",
+          d.headline ?? "",
+          d.lede ?? "",
+          // Prefer exact phrases, then tokens (skip stems already covered).
+          [...phrases, ...tokens]
+        )
       };
     }).sort((a, b) => b.match_score - a.match_score);
     const paged = scored.slice(offset, offset + limit);
@@ -330,8 +411,8 @@ var search_articles_default = defineTool4({
         phrases,
         tokens,
         stems,
-        start_date: start_date ?? null,
-        end_date: end_date ?? null,
+        start_date: startIso ?? null,
+        end_date: endIso ?? null,
         limit,
         offset,
         count: paged.length,
@@ -343,13 +424,163 @@ var search_articles_default = defineTool4({
   }
 });
 
+// src/lib/mcp/tools/search-new-articles.ts
+import { defineTool as defineTool5 } from "npm:@lovable.dev/mcp-js@0.20.1";
+import { createClient as createClient5 } from "npm:@supabase/supabase-js@^2.105.1";
+import { z as z5 } from "npm:zod@^3.25.76";
+function countWords4(text) {
+  if (!text) return 0;
+  const stripped = String(text).replace(/<[^>]+>/g, " ");
+  const matches = stripped.trim().match(/\S+/g);
+  return matches ? matches.length : 0;
+}
+var WESTERN_KENYA_TERMS2 = [
+  "western kenya",
+  "kakamega",
+  "kisumu",
+  "bungoma",
+  "busia",
+  "vihiga",
+  "siaya",
+  "homa bay",
+  "migori",
+  "kisii",
+  "nyamira",
+  "trans nzoia",
+  "uasin gishu",
+  "eldoret",
+  "nandi",
+  "bomet",
+  "kericho",
+  "luhya",
+  "luo",
+  "kalenjin",
+  "nyanza",
+  "rift valley"
+];
+function parseIso(value, field) {
+  const isoRe = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/;
+  if (!isoRe.test(value)) {
+    return { ok: false, error: `Invalid ${field}: '${value}'. Expected ISO 8601 like '2025-07-14T09:00:00Z'.` };
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return { ok: false, error: `Invalid ${field}: '${value}' is not a real date.` };
+  return { ok: true, iso: d.toISOString() };
+}
+var search_new_articles_default = defineTool5({
+  name: "search_new_articles_since",
+  title: "Search new articles since",
+  description: 'Return only published articles matching a keyword + region query that were published strictly after `last_checked` (ISO 8601). Intended for scheduled polling: call periodically with the timestamp of your previous run and persist `next_last_checked` from the response as the cursor for the next call. Returns strict typed {results, count, last_checked, next_last_checked, region_scope} where each result includes headline, lede, byline, category, region, hero_image_url, published_at, word_count, source_count, is_legend, and match_score.\n\nExamples:\n- Poll every 15 minutes for new Western Kenya music stories:\n  { "query": "music", "region_scope": "western_kenya", "last_checked": "2025-07-14T08:00:00Z", "limit": 25 }\n- Watch a phrase across Kenya:\n  { "query": "\\"afrobeats concert\\"", "region_scope": "kenya", "last_checked": "2025-07-13T00:00:00Z" }',
+  inputSchema: {
+    query: z5.string().trim().min(2).max(200).describe("Keywords or quoted phrases to match against headline/lede/body."),
+    last_checked: z5.string().describe(
+      "ISO 8601 timestamp cursor. Only articles with published_at > this value are returned. Invalid values return a clear error."
+    ),
+    region_scope: z5.enum(["western_kenya", "kenya", "national", "all"]).default("all").describe("Same semantics as search_articles.region_scope."),
+    category: z5.enum(["music", "film", "tv", "events", "celebrity", "culture", "Our Legends"]).optional().describe("Optional category filter."),
+    limit: z5.number().int().min(1).max(50).default(25).describe("Max new articles to return.")
+  },
+  annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: false },
+  handler: async ({ query, last_checked, region_scope, category, limit }) => {
+    const parsed = parseIso(last_checked, "last_checked");
+    if (!parsed.ok) return { content: [{ type: "text", text: parsed.error }], isError: true };
+    const cursor = parsed.iso;
+    const supabase = createClient5(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_PUBLISHABLE_KEY
+    );
+    const phrases = [];
+    let rest = query;
+    const phraseRe = /"([^"]+)"/g;
+    let m;
+    while ((m = phraseRe.exec(query)) !== null) {
+      const p = m[1].trim();
+      if (p.length >= 2) phrases.push(p);
+    }
+    rest = rest.replace(phraseRe, " ");
+    const tokens = rest.split(/\s+/).map((t) => t.replace(/[%_,()"]/g, "").trim()).filter((t) => t.length >= 2).slice(0, 6);
+    if (phrases.length === 0 && tokens.length === 0) {
+      return { content: [{ type: "text", text: "Query too short" }], isError: true };
+    }
+    const orClauses = [];
+    for (const needle of [...phrases, ...tokens]) {
+      const esc = needle.replace(/[,()"]/g, "");
+      if (!esc) continue;
+      orClauses.push(`headline.ilike.%${esc}%`);
+      orClauses.push(`lede.ilike.%${esc}%`);
+      orClauses.push(`body.ilike.%${esc}%`);
+    }
+    let q = supabase.from("drafts").select("id, headline, lede, body, category, region, hero_image_url, published_at, byline, sources, status").eq("status", "published").gt("published_at", cursor).or(orClauses.join(",")).order("published_at", { ascending: false, nullsFirst: false }).limit(Math.min(limit * 3 + 20, 200));
+    if (category) q = q.eq("category", category);
+    if (region_scope === "national") q = q.eq("region", "national");
+    else if (region_scope === "kenya") q = q.in("region", ["national", "western_kenya"]);
+    const { data, error } = await q;
+    if (error) return { content: [{ type: "text", text: error.message }], isError: true };
+    const rows = (data ?? []).filter((d) => {
+      if (region_scope !== "western_kenya") return true;
+      if (d.region === "western_kenya") return true;
+      const hay = `${d.headline ?? ""} ${d.lede ?? ""} ${d.body ?? ""}`.toLowerCase();
+      return WESTERN_KENYA_TERMS2.some((t) => hay.includes(t));
+    });
+    const lowerPhrases = phrases.map((p) => p.toLowerCase());
+    const lowerTokens = tokens.map((t) => t.toLowerCase());
+    const scored = rows.map((d) => {
+      const headline = (d.headline ?? "").toLowerCase();
+      const lede = (d.lede ?? "").toLowerCase();
+      const body = (d.body ?? "").toLowerCase();
+      let score = 0;
+      for (const p of lowerPhrases) {
+        if (headline.includes(p)) score += 15;
+        if (lede.includes(p)) score += 9;
+        if (body.includes(p)) score += 3;
+      }
+      for (const t of lowerTokens) {
+        if (headline.includes(t)) score += 5;
+        if (lede.includes(t)) score += 3;
+        if (body.includes(t)) score += 1;
+      }
+      return {
+        id: d.id,
+        headline: d.headline,
+        lede: d.lede ?? "",
+        byline: d.byline ?? null,
+        category: d.category ?? null,
+        region: d.region ?? null,
+        status: d.status,
+        hero_image_url: d.hero_image_url ?? null,
+        published_at: d.published_at ?? null,
+        word_count: countWords4(d.body),
+        source_count: Array.isArray(d.sources) ? d.sources.length : 0,
+        is_legend: d.category === "Our Legends",
+        match_score: score
+      };
+    });
+    const results = scored.sort((a, b) => (b.published_at ?? "").localeCompare(a.published_at ?? "")).slice(0, limit);
+    const nextCursor = results.reduce((acc, r) => {
+      if (!r.published_at) return acc;
+      return acc && acc > r.published_at ? acc : r.published_at;
+    }, null) ?? cursor;
+    return {
+      content: [{ type: "text", text: JSON.stringify(results) }],
+      structuredContent: {
+        query,
+        region_scope,
+        last_checked: cursor,
+        next_last_checked: nextCursor,
+        count: results.length,
+        results
+      }
+    };
+  }
+});
+
 // src/lib/mcp/index.ts
 var mcp_default = defineMcp({
   name: "amaica-media-mcp",
   title: "Amaica Media MCP",
   version: "0.1.0",
-  instructions: "Tools for Amaica Media, a Western Kenya-focused entertainment newsroom. Use `list_latest_articles` to browse recent published stories, `search_articles` to keyword-search with region scoping (western_kenya / kenya / national / all), `get_article` for the full body and typed metadata of a specific article, and `list_legends` to explore the 'Our Legends' roster.",
-  tools: [list_latest_articles_default, search_articles_default, get_article_default, list_legends_default]
+  instructions: "Tools for Amaica Media, a Western Kenya-focused entertainment newsroom. Use `list_latest_articles` to browse recent published stories, `search_articles` to keyword-search with region scoping (western_kenya / kenya / national / all), `search_new_articles_since` for scheduled polling of newly published stories after a cursor timestamp, `get_article` for the full body and typed metadata of a specific article, and `list_legends` to explore the 'Our Legends' roster.",
+  tools: [list_latest_articles_default, search_articles_default, search_new_articles_default, get_article_default, list_legends_default]
 });
 
 // lovable-mcp-supabase-entry.ts

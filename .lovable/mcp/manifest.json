@@ -61,7 +61,7 @@
       {
         "name": "search_articles",
         "title": "Search articles",
-        "description": "Full-text search of published Amaica Media articles across headline, lede, and body. Supports quoted \"exact phrases\", basic English stemming (plurals, -ing, -ed), region scoping ('western_kenya' | 'kenya' | 'national' | 'all'), category filter, published_at date window (start_date / end_date, ISO 8601), and pagination via limit + offset. Returns strict typed {results, count, total, limit, offset, has_more} with each result {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score}.",
+        "description": "Full-text search of published Amaica Media articles across headline, lede, and body. Supports quoted \"exact phrases\", basic English stemming (plurals, -ing, -ed), region scoping ('western_kenya' | 'kenya' | 'national' | 'all'), category filter, published_at date window (start_date / end_date, ISO 8601), and pagination via limit + offset. Returns strict typed {results, count, total, limit, offset, has_more} with each result including {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score, snippets:[{field,match,text}]}.\n\nExamples:\n- Western Kenya scoping with pagination:\n  { \"query\": \"kakamega bullfighting\", \"region_scope\": \"western_kenya\", \"limit\": 10, \"offset\": 0 }\n- Phrase match + Kenya-wide scope:\n  { \"query\": \"\\\"luo festival\\\" bongo\", \"region_scope\": \"kenya\", \"limit\": 20 }\n- Date-window filter for last month's national coverage:\n  { \"query\": \"afrobeats concert\", \"region_scope\": \"national\", \"start_date\": \"2025-06-01T00:00:00Z\", \"end_date\": \"2025-06-30T23:59:59Z\" }\n- Legends-only backlog with pagination:\n  { \"query\": \"ogada\", \"category\": \"Our Legends\", \"limit\": 25, \"offset\": 25 }",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
@@ -102,13 +102,11 @@
             },
             "start_date": {
               "type": "string",
-              "format": "date-time",
-              "description": "Only include articles with published_at >= this ISO 8601 timestamp."
+              "description": "Only include articles with published_at >= this ISO 8601 timestamp (e.g. '2025-01-31T09:00:00Z'). Invalid values return a clear error."
             },
             "end_date": {
               "type": "string",
-              "format": "date-time",
-              "description": "Only include articles with published_at <= this ISO 8601 timestamp."
+              "description": "Only include articles with published_at <= this ISO 8601 timestamp (e.g. '2025-01-31T09:00:00Z'). Invalid values return a clear error."
             },
             "limit": {
               "type": "integer",
@@ -127,6 +125,69 @@
           },
           "required": [
             "query"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_new_articles_since",
+        "title": "Search new articles since",
+        "description": "Return only published articles matching a keyword + region query that were published strictly after `last_checked` (ISO 8601). Intended for scheduled polling: call periodically with the timestamp of your previous run and persist `next_last_checked` from the response as the cursor for the next call. Returns strict typed {results, count, last_checked, next_last_checked, region_scope} where each result includes headline, lede, byline, category, region, hero_image_url, published_at, word_count, source_count, is_legend, and match_score.\n\nExamples:\n- Poll every 15 minutes for new Western Kenya music stories:\n  { \"query\": \"music\", \"region_scope\": \"western_kenya\", \"last_checked\": \"2025-07-14T08:00:00Z\", \"limit\": 25 }\n- Watch a phrase across Kenya:\n  { \"query\": \"\\\"afrobeats concert\\\"\", \"region_scope\": \"kenya\", \"last_checked\": \"2025-07-13T00:00:00Z\" }",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 200,
+              "description": "Keywords or quoted phrases to match against headline/lede/body."
+            },
+            "last_checked": {
+              "type": "string",
+              "description": "ISO 8601 timestamp cursor. Only articles with published_at > this value are returned. Invalid values return a clear error."
+            },
+            "region_scope": {
+              "type": "string",
+              "enum": [
+                "western_kenya",
+                "kenya",
+                "national",
+                "all"
+              ],
+              "default": "all",
+              "description": "Same semantics as search_articles.region_scope."
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "music",
+                "film",
+                "tv",
+                "events",
+                "celebrity",
+                "culture",
+                "Our Legends"
+              ],
+              "description": "Optional category filter."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 25,
+              "description": "Max new articles to return."
+            }
+          },
+          "required": [
+            "query",
+            "last_checked"
           ],
           "additionalProperties": false,
           "$schema": "http://json-schema.org/draft-07/schema#"
