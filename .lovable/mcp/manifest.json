@@ -132,6 +132,69 @@
         "outputSchema": null
       },
       {
+        "name": "search_new_articles_since",
+        "title": "Search new articles since",
+        "description": "Return only published articles matching a keyword + region query that were published strictly after `last_checked` (ISO 8601). Intended for scheduled polling: call periodically with the timestamp of your previous run and persist `next_last_checked` from the response as the cursor for the next call. Returns strict typed {results, count, last_checked, next_last_checked, region_scope} where each result includes headline, lede, byline, category, region, hero_image_url, published_at, word_count, source_count, is_legend, and match_score.\n\nExamples:\n- Poll every 15 minutes for new Western Kenya music stories:\n  { \"query\": \"music\", \"region_scope\": \"western_kenya\", \"last_checked\": \"2025-07-14T08:00:00Z\", \"limit\": 25 }\n- Watch a phrase across Kenya:\n  { \"query\": \"\\\"afrobeats concert\\\"\", \"region_scope\": \"kenya\", \"last_checked\": \"2025-07-13T00:00:00Z\" }",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 200,
+              "description": "Keywords or quoted phrases to match against headline/lede/body."
+            },
+            "last_checked": {
+              "type": "string",
+              "description": "ISO 8601 timestamp cursor. Only articles with published_at > this value are returned. Invalid values return a clear error."
+            },
+            "region_scope": {
+              "type": "string",
+              "enum": [
+                "western_kenya",
+                "kenya",
+                "national",
+                "all"
+              ],
+              "default": "all",
+              "description": "Same semantics as search_articles.region_scope."
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "music",
+                "film",
+                "tv",
+                "events",
+                "celebrity",
+                "culture",
+                "Our Legends"
+              ],
+              "description": "Optional category filter."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 25,
+              "description": "Max new articles to return."
+            }
+          },
+          "required": [
+            "query",
+            "last_checked"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
         "name": "get_article",
         "title": "Get article",
         "description": "Fetch a published Amaica Media article by id. Returns a strict typed payload with headline, lede, body, byline, category, region, status, published_at, hero_image_url, word_count, sources (array of {url,title?,note?,section?}), and legend info when the article is an Our Legends feature.",
