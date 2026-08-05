@@ -147,7 +147,7 @@ export default defineTool({
         "Keywords to search for across headline, lede, and body. Wrap exact phrases in double quotes (e.g. `\"nyanza festival\" bongo`). Bare tokens are also matched by simple stems (plurals, -ing, -ed).",
       ),
     region_scope: z
-      .enum(["western_kenya", "kenya", "national", "all"])
+      .enum(["western_kenya", "kenya", "national", "world", "all"])
       .default("all")
       .describe(
         "Scope results by region. 'western_kenya' restricts to region='western_kenya' OR body/headline mentioning a Western Kenya county/town. 'kenya' includes both national and western_kenya rows. 'national' restricts to region='national'. 'all' returns everything.",

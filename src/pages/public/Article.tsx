@@ -48,7 +48,7 @@ export default function PublicArticle() {
         <Link to="/" className="inline-flex items-center gap-1 text-xs text-ink-light hover:text-primary mb-6">
           <ArrowLeft size={12} /> Back
         </Link>
-        <div className="label-eyebrow text-primary mb-3">{article.category} {article.region === "western_kenya" && "· Western Kenya"}</div>
+        <div className="label-eyebrow text-primary mb-3">{article.category} {article.region === "western_kenya" && "· Western Kenya"}{article.region === "world" && "· World"}</div>
         <h1 className="font-display text-4xl md:text-5xl leading-[1.1] mb-4">{article.headline}</h1>
         {article.lede && <p className="text-xl text-ink-mid leading-relaxed mb-6 font-light">{article.lede}</p>}
         <div className="flex items-center gap-3 pb-6 mb-8 border-b border-border text-[11px] font-mono uppercase tracking-wider text-ink-light">

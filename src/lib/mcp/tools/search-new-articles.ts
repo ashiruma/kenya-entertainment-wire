@@ -52,7 +52,7 @@ export default defineTool({
         "ISO 8601 timestamp cursor. Only articles with published_at > this value are returned. Invalid values return a clear error.",
       ),
     region_scope: z
-      .enum(["western_kenya", "kenya", "national", "all"])
+      .enum(["western_kenya", "kenya", "national", "world", "all"])
       .default("all")
       .describe("Same semantics as search_articles.region_scope."),
     category: z

@@ -48,7 +48,8 @@
               "type": "string",
               "enum": [
                 "western_kenya",
-                "national"
+                "national",
+                "world"
               ],
               "description": "Filter by region."
             }
@@ -82,6 +83,7 @@
                 "western_kenya",
                 "kenya",
                 "national",
+                "world",
                 "all"
               ],
               "default": "all",
@@ -159,6 +161,7 @@
                 "western_kenya",
                 "kenya",
                 "national",
+                "world",
                 "all"
               ],
               "default": "all",

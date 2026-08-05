@@ -22,7 +22,7 @@ var list_latest_articles_default = defineTool({
   inputSchema: {
     limit: z.number().int().min(1).max(50).default(10).describe("How many articles to return (max 50)."),
     category: z.enum(["music", "film", "tv", "events", "celebrity", "culture", "Our Legends"]).optional().describe("Filter by category."),
-    region: z.enum(["western_kenya", "national"]).optional().describe("Filter by region.")
+    region: z.enum(["western_kenya", "national", "world"]).optional().describe("Filter by region.")
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ limit, category, region }) => {
@@ -286,7 +286,7 @@ var search_articles_default = defineTool4({
     query: z4.string().trim().min(2).max(200).describe(
       'Keywords to search for across headline, lede, and body. Wrap exact phrases in double quotes (e.g. `"nyanza festival" bongo`). Bare tokens are also matched by simple stems (plurals, -ing, -ed).'
     ),
-    region_scope: z4.enum(["western_kenya", "kenya", "national", "all"]).default("all").describe(
+    region_scope: z4.enum(["western_kenya", "kenya", "national", "world", "all"]).default("all").describe(
       "Scope results by region. 'western_kenya' restricts to region='western_kenya' OR body/headline mentioning a Western Kenya county/town. 'kenya' includes both national and western_kenya rows. 'national' restricts to region='national'. 'all' returns everything."
     ),
     category: z4.enum(["music", "film", "tv", "events", "celebrity", "culture", "Our Legends"]).optional().describe("Optional category filter."),
@@ -476,7 +476,7 @@ var search_new_articles_default = defineTool5({
     last_checked: z5.string().describe(
       "ISO 8601 timestamp cursor. Only articles with published_at > this value are returned. Invalid values return a clear error."
     ),
-    region_scope: z5.enum(["western_kenya", "kenya", "national", "all"]).default("all").describe("Same semantics as search_articles.region_scope."),
+    region_scope: z5.enum(["western_kenya", "kenya", "national", "world", "all"]).default("all").describe("Same semantics as search_articles.region_scope."),
     category: z5.enum(["music", "film", "tv", "events", "celebrity", "culture", "Our Legends"]).optional().describe("Optional category filter."),
     limit: z5.number().int().min(1).max(50).default(25).describe("Max new articles to return.")
   },
