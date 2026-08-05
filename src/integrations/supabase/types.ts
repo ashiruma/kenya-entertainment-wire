@@ -152,6 +152,7 @@ export type Database = {
           name: string
           priority: number
           query: string | null
+          region: string | null
           total_accepted: number
           total_duplicates: number
           total_rejected: number
@@ -171,6 +172,7 @@ export type Database = {
           name: string
           priority?: number
           query?: string | null
+          region?: string | null
           total_accepted?: number
           total_duplicates?: number
           total_rejected?: number
@@ -190,6 +192,7 @@ export type Database = {
           name?: string
           priority?: number
           query?: string | null
+          region?: string | null
           total_accepted?: number
           total_duplicates?: number
           total_rejected?: number
