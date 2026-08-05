@@ -22,7 +22,7 @@ var list_latest_articles_default = defineTool({
   inputSchema: {
     limit: z.number().int().min(1).max(50).default(10).describe("How many articles to return (max 50)."),
     category: z.enum(["music", "film", "tv", "events", "celebrity", "culture", "Our Legends"]).optional().describe("Filter by category."),
-    region: z.enum(["western_kenya", "national"]).optional().describe("Filter by region.")
+    region: z.enum(["western_kenya", "national", "world"]).optional().describe("Filter by region.")
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ limit, category, region }) => {
@@ -281,13 +281,13 @@ Examples:
 var search_articles_default = defineTool4({
   name: "search_articles",
   title: "Search articles",
-  description: `Full-text search of published Amaica Media articles across headline, lede, and body. Supports quoted "exact phrases", basic English stemming (plurals, -ing, -ed), region scoping ('western_kenya' | 'kenya' | 'national' | 'all'), category filter, published_at date window (start_date / end_date, ISO 8601), and pagination via limit + offset. Returns strict typed {results, count, total, limit, offset, has_more} with each result including {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score, snippets:[{field,match,text}]}.` + SEARCH_EXAMPLES,
+  description: `Full-text search of published Amaica Media articles across headline, lede, and body. Supports quoted "exact phrases", basic English stemming (plurals, -ing, -ed), region scoping ('western_kenya' | 'kenya' | 'national' | 'world' | 'all'), category filter, published_at date window (start_date / end_date, ISO 8601), and pagination via limit + offset. Returns strict typed {results, count, total, limit, offset, has_more} with each result including {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score, snippets:[{field,match,text}]}.` + SEARCH_EXAMPLES,
   inputSchema: {
     query: z4.string().trim().min(2).max(200).describe(
       'Keywords to search for across headline, lede, and body. Wrap exact phrases in double quotes (e.g. `"nyanza festival" bongo`). Bare tokens are also matched by simple stems (plurals, -ing, -ed).'
     ),
-    region_scope: z4.enum(["western_kenya", "kenya", "national", "all"]).default("all").describe(
-      "Scope results by region. 'western_kenya' restricts to region='western_kenya' OR body/headline mentioning a Western Kenya county/town. 'kenya' includes both national and western_kenya rows. 'national' restricts to region='national'. 'all' returns everything."
+    region_scope: z4.enum(["western_kenya", "kenya", "national", "world", "all"]).default("all").describe(
+      "Scope results by region. 'western_kenya' restricts to region='western_kenya' OR body/headline mentioning a Western Kenya county/town. 'kenya' includes both national and western_kenya rows. 'national' restricts to region='national'. 'world' restricts to international coverage (region='world'). 'all' returns everything."
     ),
     category: z4.enum(["music", "film", "tv", "events", "celebrity", "culture", "Our Legends"]).optional().describe("Optional category filter."),
     start_date: z4.string().optional().describe(
@@ -339,6 +339,7 @@ var search_articles_default = defineTool4({
     if (startIso) q = q.gte("published_at", startIso);
     if (endIso) q = q.lte("published_at", endIso);
     if (region_scope === "national") q = q.eq("region", "national");
+    else if (region_scope === "world") q = q.eq("region", "world");
     else if (region_scope === "kenya") q = q.in("region", ["national", "western_kenya"]);
     const fetchCap = Math.min((offset + limit) * 3 + 30, 300);
     const { data, error, count } = await q.limit(fetchCap);
@@ -476,7 +477,7 @@ var search_new_articles_default = defineTool5({
     last_checked: z5.string().describe(
       "ISO 8601 timestamp cursor. Only articles with published_at > this value are returned. Invalid values return a clear error."
     ),
-    region_scope: z5.enum(["western_kenya", "kenya", "national", "all"]).default("all").describe("Same semantics as search_articles.region_scope."),
+    region_scope: z5.enum(["western_kenya", "kenya", "national", "world", "all"]).default("all").describe("Same semantics as search_articles.region_scope."),
     category: z5.enum(["music", "film", "tv", "events", "celebrity", "culture", "Our Legends"]).optional().describe("Optional category filter."),
     limit: z5.number().int().min(1).max(50).default(25).describe("Max new articles to return.")
   },
@@ -513,6 +514,7 @@ var search_new_articles_default = defineTool5({
     let q = supabase.from("drafts").select("id, headline, lede, body, category, region, hero_image_url, published_at, byline, sources, status").eq("status", "published").gt("published_at", cursor).or(orClauses.join(",")).order("published_at", { ascending: false, nullsFirst: false }).limit(Math.min(limit * 3 + 20, 200));
     if (category) q = q.eq("category", category);
     if (region_scope === "national") q = q.eq("region", "national");
+    else if (region_scope === "world") q = q.eq("region", "world");
     else if (region_scope === "kenya") q = q.in("region", ["national", "western_kenya"]);
     const { data, error } = await q;
     if (error) return { content: [{ type: "text", text: error.message }], isError: true };

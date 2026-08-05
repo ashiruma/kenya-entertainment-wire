@@ -18,7 +18,7 @@ type Article = {
 export default function PublicHome() {
   const { category } = useParams<{ category?: string }>();
   const [articles, setArticles] = useState<Article[]>([]);
-  const [region, setRegion] = useState<"all" | "western_kenya" | "national">("all");
+  const [region, setRegion] = useState<"all" | "western_kenya" | "national" | "world">("all");
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -77,6 +77,7 @@ export default function PublicHome() {
               ["all", "All regions"],
               ["western_kenya", "Western Kenya"],
               ["national", "National"],
+              ["world", "World"],
             ] as const).map(([k, label]) => (
               <button
                 key={k}
@@ -104,7 +105,7 @@ export default function PublicHome() {
                 <div className="absolute top-3 left-3 bg-destructive text-destructive-foreground text-[10px] font-medium tracking-widest uppercase px-2 py-1">Top Story</div>
               </div>
               <div className="p-6">
-                <div className="label-eyebrow text-primary mb-2">{hero.category} {hero.region === "western_kenya" && "· Western Kenya"}</div>
+                <div className="label-eyebrow text-primary mb-2">{hero.category} {hero.region === "western_kenya" && "· Western Kenya"}{hero.region === "world" && "· World"}</div>
                 <h2 className="font-display text-3xl md:text-4xl leading-tight mb-3 group-hover:text-primary transition">{hero.headline}</h2>
                 <p className="text-ink-mid leading-relaxed line-clamp-3">{hero.lede}</p>
               </div>
@@ -142,7 +143,7 @@ export default function PublicHome() {
                         <div className="w-full h-full bg-teal-light flex items-center justify-center font-display text-primary/30 text-4xl">A</div>
                       )}
                     </div>
-                    <div className="label-eyebrow text-primary mb-1">{a.category} {a.region === "western_kenya" && "· Western KE"}</div>
+                    <div className="label-eyebrow text-primary mb-1">{a.category} {a.region === "western_kenya" && "· Western KE"}{a.region === "world" && "· World"}</div>
                     <h3 className="font-display text-xl leading-snug group-hover:text-primary transition mb-1">{a.headline}</h3>
                     <p className="text-sm text-ink-light line-clamp-2">{a.lede}</p>
                   </Link>

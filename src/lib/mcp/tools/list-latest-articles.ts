@@ -21,7 +21,7 @@ export default defineTool({
       .optional()
       .describe("Filter by category."),
     region: z
-      .enum(["western_kenya", "national"])
+      .enum(["western_kenya", "national", "world"])
       .optional()
       .describe("Filter by region."),
   },
