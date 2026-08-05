@@ -135,7 +135,7 @@ export default defineTool({
   name: "search_articles",
   title: "Search articles",
   description:
-    "Full-text search of published Amaica Media articles across headline, lede, and body. Supports quoted \"exact phrases\", basic English stemming (plurals, -ing, -ed), region scoping ('western_kenya' | 'kenya' | 'national' | 'all'), category filter, published_at date window (start_date / end_date, ISO 8601), and pagination via limit + offset. Returns strict typed {results, count, total, limit, offset, has_more} with each result including {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score, snippets:[{field,match,text}]}." +
+    "Full-text search of published Amaica Media articles across headline, lede, and body. Supports quoted \"exact phrases\", basic English stemming (plurals, -ing, -ed), region scoping ('western_kenya' | 'kenya' | 'national' | 'world' | 'all'), category filter, published_at date window (start_date / end_date, ISO 8601), and pagination via limit + offset. Returns strict typed {results, count, total, limit, offset, has_more} with each result including {id, headline, lede, byline, category, region, status, hero_image_url, published_at, word_count, source_count, is_legend, match_score, snippets:[{field,match,text}]}." +
     SEARCH_EXAMPLES,
   inputSchema: {
     query: z
@@ -150,7 +150,7 @@ export default defineTool({
       .enum(["western_kenya", "kenya", "national", "world", "all"])
       .default("all")
       .describe(
-        "Scope results by region. 'western_kenya' restricts to region='western_kenya' OR body/headline mentioning a Western Kenya county/town. 'kenya' includes both national and western_kenya rows. 'national' restricts to region='national'. 'all' returns everything.",
+        "Scope results by region. 'western_kenya' restricts to region='western_kenya' OR body/headline mentioning a Western Kenya county/town. 'kenya' includes both national and western_kenya rows. 'national' restricts to region='national'. 'world' restricts to international coverage (region='world'). 'all' returns everything.",
       ),
     category: z
       .enum(["music", "film", "tv", "events", "celebrity", "culture", "Our Legends"])
@@ -234,6 +234,7 @@ export default defineTool({
     if (startIso) q = q.gte("published_at", startIso);
     if (endIso) q = q.lte("published_at", endIso);
     if (region_scope === "national") q = q.eq("region", "national");
+    else if (region_scope === "world") q = q.eq("region", "world");
     else if (region_scope === "kenya") q = q.in("region", ["national", "western_kenya"]);
     // western_kenya + all are filtered client-side below (western_kenya widens beyond the flag).
 

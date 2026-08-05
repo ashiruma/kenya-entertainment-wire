@@ -112,6 +112,7 @@ export default defineTool({
 
     if (category) q = q.eq("category", category);
     if (region_scope === "national") q = q.eq("region", "national");
+    else if (region_scope === "world") q = q.eq("region", "world");
     else if (region_scope === "kenya") q = q.in("region", ["national", "western_kenya"]);
 
     const { data, error } = await q;
