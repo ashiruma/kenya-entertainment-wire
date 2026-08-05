@@ -306,7 +306,7 @@ Deno.serve(async (req) => {
         const blob = `${item.title} ${item.excerpt}`;
         let reason: string | null = null;
         if (politicsBlock.test(blob)) reason = "politics_or_hard_news";
-        else if (!(ent.test(blob) || /entertainment|sde|buzz|pulse|mpasho|ghafla|capital/i.test(item.source))) reason = "non_entertainment";
+        else if (!(ent.test(blob) || /entertainment|sde|buzz|pulse|mpasho|ghafla|capital|variety|hollywood|deadline|billboard|rolling stone|pitchfork|nme|screen daily|guardian culture|bbc/i.test(item.source))) reason = "non_entertainment";
 
         const canonical = canonicalize(item.source_url);
         const tkey = titleKey(item.title);

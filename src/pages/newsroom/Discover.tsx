@@ -29,7 +29,7 @@ export default function Discover() {
   const navigate = useNavigate();
   const { minWordCount } = useMinWordCount();
   const [stories, setStories] = useState<Story[]>([]);
-  const [filter, setFilter] = useState<"all" | "western_kenya" | "national">("all");
+  const [filter, setFilter] = useState<"all" | "western_kenya" | "national" | "world">("all");
   const [discovering, setDiscovering] = useState(false);
   const [writingId, setWritingId] = useState<string | null>(null);
   const [preview, setPreview] = useState<Story | null>(null);
@@ -318,6 +318,7 @@ export default function Discover() {
             ["all", "All"],
             ["western_kenya", "Western Kenya"],
             ["national", "National"],
+            ["world", "World"],
           ] as const).map(([key, label]) => (
             <button key={key} onClick={() => setFilter(key)} className={`px-4 py-2 text-[13px] border-b-2 -mb-px transition ${filter === key ? "border-primary text-primary font-medium" : "border-transparent text-ink-light hover:text-foreground"}`}>
               {label}

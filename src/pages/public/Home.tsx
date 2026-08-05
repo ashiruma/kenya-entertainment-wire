@@ -18,7 +18,7 @@ type Article = {
 export default function PublicHome() {
   const { category } = useParams<{ category?: string }>();
   const [articles, setArticles] = useState<Article[]>([]);
-  const [region, setRegion] = useState<"all" | "western_kenya" | "national">("all");
+  const [region, setRegion] = useState<"all" | "western_kenya" | "national" | "world">("all");
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -77,6 +77,7 @@ export default function PublicHome() {
               ["all", "All regions"],
               ["western_kenya", "Western Kenya"],
               ["national", "National"],
+              ["world", "World"],
             ] as const).map(([k, label]) => (
               <button
                 key={k}
