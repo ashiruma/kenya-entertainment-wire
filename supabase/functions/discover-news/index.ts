@@ -44,12 +44,19 @@ function pickImage(xml: string): string | null {
   return null;
 }
 
-function detectRegion(text: string): string {
+const KENYA_KEYWORDS = ["kenya", "kenyan", "nairobi", "mombasa", "nakuru", "gengetone", "kikuyu", "swahili"];
+
+function detectRegion(text: string, fallback = "national"): string {
   const lower = text.toLowerCase();
-  return WESTERN_KENYA_KEYWORDS.some((k) => lower.includes(k)) ? "western_kenya" : "national";
+  if (WESTERN_KENYA_KEYWORDS.some((k) => lower.includes(k))) return "western_kenya";
+  if (fallback === "world") {
+    // A world feed can still carry a Kenyan story — tag it national when it clearly is.
+    return KENYA_KEYWORDS.some((k) => lower.includes(k)) ? "national" : "world";
+  }
+  return fallback;
 }
 
-async function fetchFeed(url: string, source: string) {
+async function fetchFeed(url: string, source: string, fallbackRegion = "national") {
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; AmaicaBot/1.0; +https://amaica.media)" },
@@ -76,7 +83,7 @@ async function fetchFeed(url: string, source: string) {
         image_url: image,
         author,
         category: "entertainment",
-        region: detectRegion(blob),
+        region: detectRegion(blob, fallbackRegion),
         published_at: pub ? new Date(pub).toISOString() : null,
       };
     }).filter((i) => i.title && i.source_url);
@@ -87,7 +94,7 @@ async function fetchFeed(url: string, source: string) {
 }
 
 // Optional: enrich with Firecrawl web search (time-filtered, last 24h) for fresh stories
-async function firecrawlSearch(query: string): Promise<Array<{
+async function firecrawlSearch(query: string, fallbackRegion = "national"): Promise<Array<{
   title: string; source: string; source_url: string; excerpt: string;
   image_url: string | null; category: string; region: string; published_at: string | null;
 }>> {
@@ -97,7 +104,13 @@ async function firecrawlSearch(query: string): Promise<Array<{
     const res = await fetch("https://api.firecrawl.dev/v2/search", {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ query, limit: 10, lang: "en", country: "ke", tbs: "qdr:d" }),
+      body: JSON.stringify({
+        query,
+        limit: 10,
+        lang: "en",
+        country: fallbackRegion === "world" ? "us" : "ke",
+        tbs: "qdr:d",
+      }),
       signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) {
@@ -115,7 +128,7 @@ async function firecrawlSearch(query: string): Promise<Array<{
       try { host = new URL(url).hostname.replace(/^www\./, ""); } catch {}
       return {
         title, source: host, source_url: url, excerpt, image_url: null,
-        category: "entertainment", region: detectRegion(blob), published_at: null,
+        category: "entertainment", region: detectRegion(blob, fallbackRegion), published_at: null,
       };
     }).filter((i) => i.title && i.source_url);
   } catch (e) {
@@ -235,7 +248,7 @@ Deno.serve(async (req) => {
 
     const rssResults = await Promise.all(rssFeeds.map(async (f) => {
       try {
-        const items = await fetchFeed(f.url!, f.name);
+        const items = await fetchFeed(f.url!, f.name, (f.region as string) || "national");
         return { feed: f, items: items.map((i) => ({ ...i, feed_id: f.id })) as Item[], error: null as string | null };
       } catch (e) {
         return { feed: f, items: [] as Item[], error: e instanceof Error ? e.message : String(e) };
@@ -243,7 +256,7 @@ Deno.serve(async (req) => {
     }));
     const searchResults = await Promise.all(queryFeeds.map(async (f) => {
       try {
-        const items = await firecrawlSearch(f.query!);
+        const items = await firecrawlSearch(f.query!, (f.region as string) || "national");
         return { feed: f, items: items.map((i) => ({ ...i, feed_id: f.id })) as Item[], error: null as string | null };
       } catch (e) {
         return { feed: f, items: [] as Item[], error: e instanceof Error ? e.message : String(e) };
