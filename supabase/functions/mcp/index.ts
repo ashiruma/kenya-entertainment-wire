@@ -3,7 +3,7 @@
 // supabase function: mcp
 // Bundled from src/lib/mcp/index.ts by @lovable.dev/mcp-js.
 // src/lib/mcp/index.ts
-import { defineMcp } from "npm:@lovable.dev/mcp-js@0.20.1";
+import { auth, defineMcp } from "npm:@lovable.dev/mcp-js@0.20.1";
 
 // src/lib/mcp/tools/list-latest-articles.ts
 import { defineTool } from "npm:@lovable.dev/mcp-js@0.20.1";
@@ -624,11 +624,16 @@ var search_new_articles_default = defineTool5({
 });
 
 // src/lib/mcp/index.ts
+var projectRef = "tmdkvmvpckwncmumcibt";
 var mcp_default = defineMcp({
   name: "amaica-media-mcp",
   title: "Amaica Media MCP",
   version: "0.1.0",
   instructions: "Tools for Amaica Media, a Western Kenya-focused entertainment newsroom. Use `list_latest_articles` to browse recent published stories, `search_articles` to keyword-search with region scoping (western_kenya / kenya / national / all), `search_new_articles_since` for scheduled polling of newly published stories after a cursor timestamp, `get_article` for the full body and typed metadata of a specific article, and `list_legends` to explore the 'Our Legends' roster.",
+  auth: auth.oauth.issuer({
+    issuer: `https://${projectRef}.supabase.co/auth/v1`,
+    acceptedAudiences: "authenticated"
+  }),
   tools: [list_latest_articles_default, search_articles_default, search_new_articles_default, get_article_default, list_legends_default]
 });
 
