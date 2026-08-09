@@ -1,5 +1,5 @@
 import { defineTool } from "@lovable.dev/mcp-js";
-import { createClient } from "@supabase/supabase-js";
+import { requireAuth, supabaseForUser } from "../supabase";
 import { z } from "zod";
 
 export default defineTool({
@@ -11,11 +11,10 @@ export default defineTool({
     country: z.string().optional().describe("Filter by country name."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ limit, country }) => {
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
-    );
+  handler: async ({ limit, country }, ctx) => {
+    const denied = requireAuth(ctx);
+    if (denied) return denied;
+    const supabase = supabaseForUser(ctx);
     let q = supabase
       .from("legends")
       .select("id, name, country, era, field, short_bio, impact, image_url")

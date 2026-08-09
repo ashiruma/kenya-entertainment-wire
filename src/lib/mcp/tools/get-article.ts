@@ -1,5 +1,5 @@
 import { defineTool } from "@lovable.dev/mcp-js";
-import { createClient } from "@supabase/supabase-js";
+import { requireAuth, supabaseForUser } from "../supabase";
 import { z } from "zod";
 
 function countWords(text: string | null | undefined): number {
@@ -18,11 +18,10 @@ export default defineTool({
     id: z.string().uuid().describe("The article id (uuid)."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ id }) => {
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
-    );
+  handler: async ({ id }, ctx) => {
+    const denied = requireAuth(ctx);
+    if (denied) return denied;
+    const supabase = supabaseForUser(ctx);
     const { data, error } = await supabase
       .from("drafts")
       .select(

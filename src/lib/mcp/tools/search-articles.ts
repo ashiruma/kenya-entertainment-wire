@@ -1,5 +1,5 @@
 import { defineTool } from "@lovable.dev/mcp-js";
-import { createClient } from "@supabase/supabase-js";
+import { requireAuth, supabaseForUser } from "../supabase";
 import { z } from "zod";
 
 function countWords(text: string | null | undefined): number {
@@ -184,11 +184,10 @@ export default defineTool({
       .describe("Number of results to skip for pagination."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ query, region_scope, category, start_date, end_date, limit, offset }) => {
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
-    );
+  handler: async ({ query, region_scope, category, start_date, end_date, limit, offset }, ctx) => {
+    const denied = requireAuth(ctx);
+    if (denied) return denied;
+    const supabase = supabaseForUser(ctx);
 
     const parsedStart = parseIsoDate(start_date, "start_date");
     if (!parsedStart.ok) return { content: [{ type: "text", text: parsedStart.error }], isError: true };

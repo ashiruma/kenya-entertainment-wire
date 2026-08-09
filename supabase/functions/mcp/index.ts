@@ -7,7 +7,63 @@ import { defineMcp } from "npm:@lovable.dev/mcp-js@0.20.1";
 
 // src/lib/mcp/tools/list-latest-articles.ts
 import { defineTool } from "npm:@lovable.dev/mcp-js@0.20.1";
+
+// src/lib/mcp/supabase.ts
 import { createClient } from "npm:@supabase/supabase-js@^2.105.1";
+function runtimeEnv(name) {
+  const runtime = globalThis;
+  return runtime.Deno?.env?.get?.(name) ?? runtime.process?.env?.[name];
+}
+function configuredEnv(names) {
+  for (const name of names) {
+    const value = runtimeEnv(name)?.trim();
+    if (value) return value;
+  }
+  return void 0;
+}
+function supabaseProjectUrl() {
+  const url = configuredEnv(["SUPABASE_URL", "VITE_SUPABASE_URL"]);
+  if (!url) throw new Error("SUPABASE_URL (or VITE_SUPABASE_URL) is required");
+  return url;
+}
+function supabasePublishableKey() {
+  const direct = configuredEnv(["SUPABASE_PUBLISHABLE_KEY", "VITE_SUPABASE_PUBLISHABLE_KEY"]);
+  if (direct) return direct;
+  const keyset = runtimeEnv("SUPABASE_PUBLISHABLE_KEYS");
+  if (keyset) {
+    try {
+      const parsed = JSON.parse(keyset);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const keys = parsed;
+        const key = [keys.default, ...Object.values(keys)].find((v) => typeof v === "string" && v.trim().startsWith("sb_publishable_"))?.trim();
+        if (key) return key;
+      }
+    } catch {
+    }
+  }
+  const legacy = configuredEnv(["SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY"]);
+  if (legacy) return legacy;
+  throw new Error("SUPABASE_PUBLISHABLE_KEY, SUPABASE_PUBLISHABLE_KEYS, or SUPABASE_ANON_KEY is required");
+}
+function supabaseForUser(ctx) {
+  const token = ctx.getToken();
+  if (!token) throw new Error("supabaseForUser requires a verified OAuth token");
+  return createClient(supabaseProjectUrl(), supabasePublishableKey(), {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+}
+function requireAuth(ctx) {
+  if (!ctx.isAuthenticated()) {
+    return {
+      content: [{ type: "text", text: "Not authenticated. Sign in to use Amaica Media tools." }],
+      isError: true
+    };
+  }
+  return null;
+}
+
+// src/lib/mcp/tools/list-latest-articles.ts
 import { z } from "npm:zod@^3.25.76";
 function countWords(text) {
   if (!text) return 0;
@@ -25,11 +81,10 @@ var list_latest_articles_default = defineTool({
     region: z.enum(["western_kenya", "national", "world"]).optional().describe("Filter by region.")
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ limit, category, region }) => {
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_PUBLISHABLE_KEY
-    );
+  handler: async ({ limit, category, region }, ctx) => {
+    const denied = requireAuth(ctx);
+    if (denied) return denied;
+    const supabase = supabaseForUser(ctx);
     let q = supabase.from("drafts").select("id, headline, lede, body, category, region, hero_image_url, published_at, byline, sources, status").eq("status", "published").order("published_at", { ascending: false, nullsFirst: false }).limit(limit);
     if (category) q = q.eq("category", category);
     if (region) q = q.eq("region", region);
@@ -60,7 +115,6 @@ var list_latest_articles_default = defineTool({
 
 // src/lib/mcp/tools/get-article.ts
 import { defineTool as defineTool2 } from "npm:@lovable.dev/mcp-js@0.20.1";
-import { createClient as createClient2 } from "npm:@supabase/supabase-js@^2.105.1";
 import { z as z2 } from "npm:zod@^3.25.76";
 function countWords2(text) {
   if (!text) return 0;
@@ -76,11 +130,10 @@ var get_article_default = defineTool2({
     id: z2.string().uuid().describe("The article id (uuid).")
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ id }) => {
-    const supabase = createClient2(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_PUBLISHABLE_KEY
-    );
+  handler: async ({ id }, ctx) => {
+    const denied = requireAuth(ctx);
+    if (denied) return denied;
+    const supabase = supabaseForUser(ctx);
     const { data, error } = await supabase.from("drafts").select(
       "id, headline, lede, body, category, region, hero_image_url, published_at, byline, sources, status, template_type, updated_at"
     ).eq("id", id).eq("status", "published").maybeSingle();
@@ -131,7 +184,6 @@ var get_article_default = defineTool2({
 
 // src/lib/mcp/tools/list-legends.ts
 import { defineTool as defineTool3 } from "npm:@lovable.dev/mcp-js@0.20.1";
-import { createClient as createClient3 } from "npm:@supabase/supabase-js@^2.105.1";
 import { z as z3 } from "npm:zod@^3.25.76";
 var list_legends_default = defineTool3({
   name: "list_legends",
@@ -142,11 +194,10 @@ var list_legends_default = defineTool3({
     country: z3.string().optional().describe("Filter by country name.")
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ limit, country }) => {
-    const supabase = createClient3(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_PUBLISHABLE_KEY
-    );
+  handler: async ({ limit, country }, ctx) => {
+    const denied = requireAuth(ctx);
+    if (denied) return denied;
+    const supabase = supabaseForUser(ctx);
     let q = supabase.from("legends").select("id, name, country, era, field, short_bio, impact, image_url").eq("active", true).order("name").limit(limit);
     if (country) q = q.eq("country", country);
     const { data, error } = await q;
@@ -160,7 +211,6 @@ var list_legends_default = defineTool3({
 
 // src/lib/mcp/tools/search-articles.ts
 import { defineTool as defineTool4 } from "npm:@lovable.dev/mcp-js@0.20.1";
-import { createClient as createClient4 } from "npm:@supabase/supabase-js@^2.105.1";
 import { z as z4 } from "npm:zod@^3.25.76";
 function countWords3(text) {
   if (!text) return 0;
@@ -300,11 +350,10 @@ var search_articles_default = defineTool4({
     offset: z4.number().int().min(0).max(1e4).default(0).describe("Number of results to skip for pagination.")
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ query, region_scope, category, start_date, end_date, limit, offset }) => {
-    const supabase = createClient4(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_PUBLISHABLE_KEY
-    );
+  handler: async ({ query, region_scope, category, start_date, end_date, limit, offset }, ctx) => {
+    const denied = requireAuth(ctx);
+    if (denied) return denied;
+    const supabase = supabaseForUser(ctx);
     const parsedStart = parseIsoDate(start_date, "start_date");
     if (!parsedStart.ok) return { content: [{ type: "text", text: parsedStart.error }], isError: true };
     const parsedEnd = parseIsoDate(end_date, "end_date");
@@ -427,7 +476,6 @@ var search_articles_default = defineTool4({
 
 // src/lib/mcp/tools/search-new-articles.ts
 import { defineTool as defineTool5 } from "npm:@lovable.dev/mcp-js@0.20.1";
-import { createClient as createClient5 } from "npm:@supabase/supabase-js@^2.105.1";
 import { z as z5 } from "npm:zod@^3.25.76";
 function countWords4(text) {
   if (!text) return 0;
@@ -482,14 +530,13 @@ var search_new_articles_default = defineTool5({
     limit: z5.number().int().min(1).max(50).default(25).describe("Max new articles to return.")
   },
   annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: false },
-  handler: async ({ query, last_checked, region_scope, category, limit }) => {
+  handler: async ({ query, last_checked, region_scope, category, limit }, ctx) => {
     const parsed = parseIso(last_checked, "last_checked");
     if (!parsed.ok) return { content: [{ type: "text", text: parsed.error }], isError: true };
     const cursor = parsed.iso;
-    const supabase = createClient5(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_PUBLISHABLE_KEY
-    );
+    const denied = requireAuth(ctx);
+    if (denied) return denied;
+    const supabase = supabaseForUser(ctx);
     const phrases = [];
     let rest = query;
     const phraseRe = /"([^"]+)"/g;
