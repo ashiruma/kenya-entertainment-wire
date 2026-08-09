@@ -8,6 +8,7 @@ import PublicArticle from "./pages/public/Article";
 import LegendPage from "./pages/public/Legend";
 import StyleGuide from "./pages/public/StyleGuide";
 import AuthPage from "./pages/Auth";
+import OAuthConsent from "./pages/OAuthConsent";
 import Discover from "./pages/newsroom/Discover";
 import DraftsList from "./pages/newsroom/DraftsList";
 import DraftEditor from "./pages/newsroom/DraftEditor";
@@ -33,6 +34,7 @@ const App = () => (
           <Route path="/legends/:id" element={<LegendPage />} />
           <Route path="/style-guide" element={<StyleGuide />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
           <Route path="/newsroom" element={<Discover />} />
           <Route path="/newsroom/drafts" element={<DraftsList />} />
           <Route path="/newsroom/draft/:id" element={<DraftEditor />} />
