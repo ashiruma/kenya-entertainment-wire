@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { useAuth } from "@/lib/auth";
@@ -13,6 +13,9 @@ const schema = z.object({
 
 export default function AuthPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const rawNext = params.get("next");
+  const next = rawNext && /^\/(?!\/)/.test(rawNext) ? rawNext : "/newsroom";
   const { user, loading } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
@@ -21,8 +24,8 @@ export default function AuthPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) navigate("/newsroom", { replace: true });
-  }, [user, loading, navigate]);
+    if (!loading && user) navigate(next, { replace: true });
+  }, [user, loading, navigate, next]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +41,7 @@ export default function AuthPage() {
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin + "/newsroom",
+            emailRedirectTo: window.location.origin + next,
             data: { display_name: displayName || email.split("@")[0] },
           },
         });
@@ -47,7 +50,7 @@ export default function AuthPage() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate("/newsroom");
+        navigate(next);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Auth failed");
@@ -57,7 +60,9 @@ export default function AuthPage() {
   };
 
   const google = async () => {
-    const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + "/newsroom" });
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin + "/auth?next=" + encodeURIComponent(next),
+    });
     if (result.error) toast.error("Google sign-in failed");
   };
 

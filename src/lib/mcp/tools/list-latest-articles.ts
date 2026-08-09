@@ -1,5 +1,5 @@
 import { defineTool } from "@lovable.dev/mcp-js";
-import { createClient } from "@supabase/supabase-js";
+import { requireAuth, supabaseForUser } from "../supabase";
 import { z } from "zod";
 
 function countWords(text: string | null | undefined): number {
@@ -26,11 +26,10 @@ export default defineTool({
       .describe("Filter by region."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ limit, category, region }) => {
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
-    );
+  handler: async ({ limit, category, region }, ctx) => {
+    const denied = requireAuth(ctx);
+    if (denied) return denied;
+    const supabase = supabaseForUser(ctx);
     let q = supabase
       .from("drafts")
       .select("id, headline, lede, body, category, region, hero_image_url, published_at, byline, sources, status")

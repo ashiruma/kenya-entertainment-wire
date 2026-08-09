@@ -1,5 +1,5 @@
 import { defineTool } from "@lovable.dev/mcp-js";
-import { createClient } from "@supabase/supabase-js";
+import { requireAuth, supabaseForUser } from "../supabase";
 import { z } from "zod";
 
 function countWords(text: string | null | undefined): number {
@@ -62,15 +62,14 @@ export default defineTool({
     limit: z.number().int().min(1).max(50).default(25).describe("Max new articles to return."),
   },
   annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: false },
-  handler: async ({ query, last_checked, region_scope, category, limit }) => {
+  handler: async ({ query, last_checked, region_scope, category, limit }, ctx) => {
     const parsed = parseIso(last_checked, "last_checked");
     if (!parsed.ok) return { content: [{ type: "text", text: parsed.error }], isError: true };
     const cursor = parsed.iso;
 
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
-    );
+    const denied = requireAuth(ctx);
+    if (denied) return denied;
+    const supabase = supabaseForUser(ctx);
 
     // Parse query into phrases + tokens for ilike matching.
     const phrases: string[] = [];
